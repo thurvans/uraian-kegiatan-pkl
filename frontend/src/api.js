@@ -2,7 +2,71 @@ const API_BASE_URL = (import.meta.env.VITE_API_URL || '/api/v1').replace(/\/$/, 
 const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_CACHE_TTL_MS = 30_000;
 
-let accessToken = null;
+const AUTH_STORAGE_KEY = 'uraian_pkl_auth';
+
+export function parseJwt(token) {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      window
+        .atob(base64)
+        .split('')
+        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch {
+    return null;
+  }
+}
+
+export function isTokenValid(token, bufferSeconds = 15) {
+  if (!token || typeof token !== 'string') return false;
+  const payload = parseJwt(token);
+  if (!payload || !payload.exp) return false;
+  return payload.exp * 1000 > Date.now() + bufferSeconds * 1000;
+}
+
+export function getStoredSession() {
+  try {
+    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+export function saveSession({ accessToken: newAccessToken, user, refreshToken }) {
+  try {
+    const current = getStoredSession() || {};
+    const session = {
+      accessToken: newAccessToken || current.accessToken || null,
+      refreshToken: refreshToken !== undefined ? refreshToken : current.refreshToken || null,
+      user: user || current.user || null
+    };
+    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+    if (newAccessToken) setToken(newAccessToken);
+    return session;
+  } catch {
+    return null;
+  }
+}
+
+export function clearSession() {
+  try {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+  } catch {
+    // abaikan jika localStorage dibatasi browser
+  }
+  setToken(null);
+}
+
+const initialSession = getStoredSession();
+let accessToken = (initialSession?.accessToken && isTokenValid(initialSession.accessToken))
+  ? initialSession.accessToken
+  : null;
 let refreshRequest = null;
 let cacheGeneration = 0;
 const responseCache = new Map();
@@ -47,17 +111,42 @@ async function parsePayload(response) {
   return contentType.includes('application/json') ? response.json() : response.text();
 }
 
-async function refreshAccessToken() {
+export async function refreshAccessToken() {
   if (!refreshRequest) {
-    refreshRequest = fetch(`${API_BASE_URL}/auth/refresh`, { method: 'POST', credentials: 'include' })
+    const stored = getStoredSession();
+    const headers = {};
+    let body;
+    if (stored?.refreshToken) {
+      headers['Content-Type'] = 'application/json';
+      body = JSON.stringify({ refreshToken: stored.refreshToken });
+    }
+
+    refreshRequest = fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      credentials: 'include',
+      headers,
+      body
+    })
       .then(async response => {
         const payload = await parsePayload(response);
-        if (!response.ok) throw new ApiError(payload?.message || 'Sesi telah berakhir.', { status: response.status });
-        setToken(payload.data.accessToken);
-        return payload.data.accessToken;
+        if (!response.ok) {
+          clearSession();
+          throw new ApiError(payload?.message || 'Sesi telah berakhir.', { status: response.status });
+        }
+        saveSession({
+          accessToken: payload.data.accessToken,
+          refreshToken: payload.data.refreshToken,
+          user: payload.data.user
+        });
+        return payload.data;
       })
-      .catch(error => { setToken(null); throw error; })
-      .finally(() => { refreshRequest = null; });
+      .catch(error => {
+        clearSession();
+        throw error;
+      })
+      .finally(() => {
+        refreshRequest = null;
+      });
   }
   return refreshRequest;
 }

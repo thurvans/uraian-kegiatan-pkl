@@ -12,7 +12,7 @@ const cookie = {
   httpOnly: true,
   secure: config.NODE_ENV === 'production',
   sameSite: config.COOKIE_SAME_SITE,
-  path: '/api/v1/auth'
+  path: '/'
 };
 
 authRouter.post('/login', async (req, res) => {
@@ -22,25 +22,62 @@ authRouter.post('/login', async (req, res) => {
   const refreshToken = randomToken();
   await prisma.refreshSession.create({ data: { userId: user.id, tokenHash: hashToken(refreshToken), expiresAt: new Date(Date.now() + 30 * 86_400_000) } });
   res.cookie('refresh_token', refreshToken, { ...cookie, maxAge: 30 * 86_400_000 });
-  res.json({ success: true, data: { accessToken: await createAccessToken(user), user: { id: user.id, name: user.name, email: user.email, role: user.role } }, message: 'Login berhasil.' });
+  res.json({
+    success: true,
+    data: {
+      accessToken: await createAccessToken(user),
+      refreshToken,
+      user: { id: user.id, name: user.name, email: user.email, role: user.role }
+    },
+    message: 'Login berhasil.'
+  });
 });
 
 authRouter.post('/refresh', async (req, res) => {
-  const raw = req.cookies.refresh_token;
+  const raw = req.cookies.refresh_token || req.body?.refreshToken;
   if (!raw) throw appError(401, 'Refresh session tidak tersedia.');
-  const session = await prisma.refreshSession.findUnique({ where: { tokenHash: hashToken(raw) }, include: { user: true } });
-  if (!session || session.revokedAt || session.expiresAt <= new Date() || !session.user.isActive) throw appError(401, 'Refresh session tidak valid.');
+  const tokenHash = hashToken(raw);
+  const session = await prisma.refreshSession.findUnique({ where: { tokenHash }, include: { user: true } });
+  
+  if (!session) throw appError(401, 'Refresh session tidak valid.');
+  
+  // Tangani kemungkinan race condition (mis. React StrictMode atau concurrent request).
+  // Berikan grace period 30 detik jika sesi baru saja dirotasi.
+  if (session.revokedAt) {
+    const isRecent = (Date.now() - session.revokedAt.getTime()) < 30_000;
+    if (isRecent && session.user?.isActive && session.expiresAt > new Date()) {
+      const accessToken = await createAccessToken(session.user);
+      return res.json({
+        success: true,
+        data: {
+          accessToken,
+          user: { id: session.user.id, name: session.user.name, email: session.user.email, role: session.user.role }
+        }
+      });
+    }
+    throw appError(401, 'Refresh session tidak valid.');
+  }
+
+  if (session.expiresAt <= new Date() || !session.user?.isActive) throw appError(401, 'Refresh session tidak valid.');
+
   const next = randomToken();
   await prisma.$transaction([
     prisma.refreshSession.update({ where: { id: session.id }, data: { revokedAt: new Date() } }),
     prisma.refreshSession.create({ data: { userId: session.userId, tokenHash: hashToken(next), expiresAt: new Date(Date.now() + 30 * 86_400_000) } })
   ]);
   res.cookie('refresh_token', next, { ...cookie, maxAge: 30 * 86_400_000 });
-  res.json({ success: true, data: { accessToken: await createAccessToken(session.user) } });
+  res.json({
+    success: true,
+    data: {
+      accessToken: await createAccessToken(session.user),
+      refreshToken: next,
+      user: { id: session.user.id, name: session.user.name, email: session.user.email, role: session.user.role }
+    }
+  });
 });
 
 authRouter.post('/logout', async (req, res) => {
-  const raw = req.cookies.refresh_token;
+  const raw = req.cookies.refresh_token || req.body?.refreshToken;
   if (raw) await prisma.refreshSession.updateMany({ where: { tokenHash: hashToken(raw), revokedAt: null }, data: { revokedAt: new Date() } });
   res.clearCookie('refresh_token', cookie).json({ success: true, message: 'Logout berhasil.' });
 });

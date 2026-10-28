@@ -1,5 +1,13 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { api, setToken } from '../api.js';
+import {
+  api,
+  clearSession,
+  getStoredSession,
+  isTokenValid,
+  refreshAccessToken,
+  saveSession,
+  setToken
+} from '../api.js';
 
 const AuthContext = createContext(null);
 
@@ -8,41 +16,88 @@ function AppLoading() {
 }
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [ready, setReady] = useState(false);
+  const initialSession = getStoredSession();
+  const hasValidToken = Boolean(initialSession?.accessToken && isTokenValid(initialSession.accessToken));
+
+  const [user, setUser] = useState(() => (hasValidToken ? initialSession.user : null));
+  const [ready, setReady] = useState(() => hasValidToken);
 
   useEffect(() => {
     let active = true;
+
     async function restoreSession() {
+      const stored = getStoredSession();
+
+      // Kasus 1: Access token masih valid (masa berlaku 30 menit)
+      if (stored?.accessToken && isTokenValid(stored.accessToken)) {
+        setToken(stored.accessToken);
+        if (active) {
+          if (stored.user) setUser(stored.user);
+          setReady(true);
+        }
+        try {
+          const me = await api('/auth/me');
+          if (active && me?.data) {
+            setUser(me.data);
+            saveSession({ user: me.data });
+          }
+        } catch (err) {
+          if (err?.status === 401 && active) {
+            clearSession();
+            setUser(null);
+          }
+        }
+        return;
+      }
+
+      // Kasus 2: Access token kedaluwarsa atau belum ada, pulihkan via refresh token
       try {
-        const refreshed = await api('/auth/refresh', { method: 'POST' }, false);
-        setToken(refreshed.data.accessToken);
-        const me = await api('/auth/me');
-        if (active) setUser(me.data);
+        const result = await refreshAccessToken();
+        if (active && result?.user) {
+          setUser(result.user);
+        }
       } catch {
-        setToken(null);
+        if (active) {
+          clearSession();
+          setUser(null);
+        }
       } finally {
         if (active) setReady(true);
       }
     }
+
     restoreSession();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, []);
 
   const value = useMemo(() => ({
     user,
     login: async credentials => {
       const result = await api('/auth/login', { method: 'POST', body: JSON.stringify(credentials) }, false);
-      setToken(result.data.accessToken);
-      setUser(result.data.user);
-      return result.data.user;
+      const { accessToken, user: userData, refreshToken } = result.data;
+      saveSession({ accessToken, user: userData, refreshToken });
+      setUser(userData);
+      return userData;
     },
     logout: async () => {
-      await api('/auth/logout', { method: 'POST' }).catch(() => {});
-      setToken(null);
+      const stored = getStoredSession();
+      await api('/auth/logout', {
+        method: 'POST',
+        body: stored?.refreshToken ? JSON.stringify({ refreshToken: stored.refreshToken }) : undefined
+      }).catch(() => {});
+      clearSession();
       setUser(null);
     },
-    updateUser: updates => setUser(current => current ? { ...current, ...updates } : current)
+    updateUser: updates => {
+      setUser(current => {
+        if (!current) return current;
+        const updated = { ...current, ...updates };
+        saveSession({ user: updated });
+        return updated;
+      });
+    }
   }), [user]);
 
   return <AuthContext.Provider value={value}>{ready ? children : <AppLoading />}</AuthContext.Provider>;

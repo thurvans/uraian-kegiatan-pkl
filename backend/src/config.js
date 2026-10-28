@@ -104,7 +104,7 @@ const schema = z.object({
   ),
   JWT_ISSUER: z.string().default('pkl-activity'),
   JWT_AUDIENCE: z.string().default('pkl-web'),
-  JWT_ACCESS_TTL_MINUTES: z.coerce.number().int().positive().default(15),
+  JWT_ACCESS_TTL_MINUTES: z.coerce.number().int().positive().default(30),
   JWT_SIGNING_SECRET: z.string().min(32),
   FRONTEND_URL: z.string().url().default('http://localhost:5173'),
   TRUST_PROXY: z.coerce.number().int().min(0).max(3).default(0),
