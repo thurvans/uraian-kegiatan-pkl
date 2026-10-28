@@ -1,0 +1,38 @@
+import { useEffect, useRef, useState } from 'react';
+import { FileText } from '../icons.jsx';
+import { Status } from '../Feedback.jsx';
+import { ModalFrame } from '../Modal.jsx';
+import { PAGE_SIZE, Pagination } from '../Pagination.jsx';
+import { fmtDate, fmtDateShort, fmtTimeRange } from '../../utils/formatters.js';
+
+function SelectAllCheckbox({ checked, indeterminate, disabled, onChange }) {
+  const ref = useRef(null);
+  useEffect(() => { if (ref.current) ref.current.indeterminate = indeterminate; }, [indeterminate]);
+  return <input ref={ref} className="h-4 w-4 rounded border-slate-300 accent-navy-900" type="checkbox" checked={checked} disabled={disabled} onChange={onChange} aria-label="Pilih semua laporan"/>;
+}
+
+export function ReportTable({ reports, actions, selected = [], onSelect, onSelectAll, canSelect = () => true, showIntern = false, className = '' }) {
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(reports.length / PAGE_SIZE));
+  useEffect(() => { setPage(current => Math.min(current, totalPages)); }, [totalPages]);
+  const paginatedReports = reports.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const selectableReports = reports.filter(canSelect);
+  const allSelected = selectableReports.length > 0 && selectableReports.every(report => selected.includes(report.id));
+  const someSelected = !allSelected && selectableReports.some(report => selected.includes(report.id));
+  const columnCount = 5 + Number(Boolean(onSelect)) + Number(showIntern) + Number(Boolean(actions));
+  return <div className={`overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,.04)] ${className}`}><div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left text-sm"><caption className="sr-only">Daftar laporan mingguan PKL</caption><thead className="border-b border-slate-200 bg-slate-50/80 text-[11px] uppercase tracking-[.08em] text-slate-500"><tr>{onSelect && <th className="w-24 px-5 py-3.5"><label className="flex cursor-pointer items-center gap-2"><SelectAllCheckbox checked={allSelected} indeterminate={someSelected} disabled={!selectableReports.length} onChange={onSelectAll}/><span>Semua</span></label></th>}{showIntern && <th className="px-5 py-3.5">Peserta magang</th>}<th className="px-5 py-3.5">Periode laporan</th><th className="px-5 py-3.5">Tanggal mulai</th><th className="px-5 py-3.5">Isi</th><th className="px-5 py-3.5">Status</th>{actions && <th className="px-5 py-3.5 text-right">Aksi</th>}</tr></thead><tbody className="divide-y divide-slate-100">{reports.length ? paginatedReports.map(report => <tr key={report.id} className={`transition hover:bg-blue-50/35 ${selected.includes(report.id) ? 'bg-blue-50/60' : ''}`}>{onSelect && <td className="px-5 py-4"><input className="h-4 w-4 accent-navy-900 disabled:cursor-not-allowed disabled:opacity-35" aria-label={`Pilih laporan minggu ${report.weekIndex}`} type="checkbox" checked={selected.includes(report.id)} disabled={!canSelect(report)} onChange={() => onSelect(report.id)}/></td>}{showIntern && <td className="px-5 py-4"><p className="font-bold text-slate-900">{report.placement?.intern?.name || 'Peserta magang'}</p><p className="mt-0.5 text-xs text-slate-400">{report.placement?.division || 'Penempatan PKL'}</p></td>}<td className="px-5 py-4"><p className="font-bold text-slate-900">Minggu {report.weekIndex}</p><p className="mt-0.5 text-xs text-slate-400">Bulan ke-{report.monthIndex}</p></td><td className="px-5 py-4 font-medium text-slate-600">{fmtDateShort(report.weekStart)}</td><td className="px-5 py-4"><span className="inline-flex items-center gap-1.5 text-slate-600"><FileText size={15} className="text-slate-400"/>{report.activities.length} kegiatan</span></td><td className="px-5 py-4"><Status value={report.status}/></td>{actions && <td className="px-5 py-4 text-right">{actions(report)}</td>}</tr>) : <tr><td colSpan={columnCount}><Empty compact title="Belum ada laporan" text="Laporan akan tampil setelah kegiatan tersimpan."/></td></tr>}</tbody></table></div><Pagination page={page} totalItems={reports.length} onPageChange={setPage}/></div>;
+}
+
+export function Empty({ title, text, compact = false }) {
+  return <div className={`grid place-items-center px-6 text-center ${compact ? 'min-h-44 py-7' : 'min-h-64 py-10'}`}><div><span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-slate-100 text-slate-400"><FileText size={22}/></span><p className="mt-4 font-bold text-slate-800">{title}</p><p className="mx-auto mt-1 max-w-sm text-sm leading-6 text-slate-500">{text}</p></div></div>;
+}
+
+export function ReportDetailModal({ report, onClose }) {
+  const [page, setPage] = useState(1);
+  useEffect(() => { setPage(1); }, [report?.id]);
+  const activities = report?.activities || [];
+  const paginatedActivities = activities.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  return <ModalFrame open={Boolean(report)} onClose={onClose} title={report ? `Laporan minggu ${report.weekIndex}` : ''} description={report ? `${report.placement?.intern?.name || 'Peserta magang'} · ${fmtDate(report.weekStart)}` : ''} maxWidth="max-w-5xl">{report && <div className="p-6"><div className="mb-5 grid gap-3 sm:grid-cols-3"><div className="rounded-2xl bg-slate-50 p-4"><p className="text-xs font-medium text-slate-400">Periode</p><p className="mt-1 text-sm font-bold">Minggu {report.weekIndex} · Bulan {report.monthIndex}</p></div><div className="rounded-2xl bg-slate-50 p-4"><p className="text-xs font-medium text-slate-400">Jumlah kegiatan</p><p className="mt-1 text-sm font-bold">{report.activities.length} kegiatan</p></div><div className="rounded-2xl bg-slate-50 p-4"><p className="text-xs font-medium text-slate-400">Status</p><div className="mt-1"><Status value={report.status}/></div></div></div><div className="overflow-hidden rounded-2xl border border-slate-200"><div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500"><tr><th className="px-4 py-3">No</th><th className="px-4 py-3">Hari/tanggal</th><th className="px-4 py-3">Waktu</th><th className="px-4 py-3">Jenis kegiatan</th></tr></thead><tbody className="divide-y divide-slate-100">{paginatedActivities.map((activity, index) => <tr key={activity.id}><td className="px-4 py-4 text-center text-slate-400">{(page - 1) * PAGE_SIZE + index + 1}</td><td className="px-4 py-4 font-medium text-slate-800">{fmtDate(activity.activityDate)}</td><td className="whitespace-nowrap px-4 py-4 text-slate-600">{fmtTimeRange(activity.startTime, activity.endTime)}</td><td className="whitespace-pre-line px-4 py-4 leading-6 text-slate-600">{activity.description}</td></tr>)}</tbody></table></div><Pagination page={page} totalItems={activities.length} onPageChange={setPage}/></div><div className="mt-5 flex justify-end"><button className="btn-secondary" onClick={onClose}>Tutup</button></div></div>}</ModalFrame>;
+}
+

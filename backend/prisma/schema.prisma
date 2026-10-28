@@ -1,0 +1,139 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  MAGANG
+  MENTOR
+}
+
+enum ReportStatus {
+  DRAFT
+  SUBMITTED
+  RETURNED
+  SIGNED
+}
+
+enum ApprovalAction {
+  SUBMITTED
+  RETURNED
+  SIGNED
+  SIGNATURE_CHANGED
+}
+
+model User {
+  id                 String                @id @default(uuid())
+  name               String
+  email              String                @unique
+  passwordHash       String
+  role               Role
+  isActive           Boolean               @default(true)
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  internPlacements   InternshipPlacement[] @relation("Intern")
+  mentorPlacements   InternshipPlacement[] @relation("Mentor")
+  signatures         MentorSignature[]
+  signedReports      WeeklyReport[]        @relation("SignedBy")
+  approvalAudits     ApprovalAudit[]
+  refreshSessions    RefreshSession[]
+}
+
+model InternshipPlacement {
+  id         String         @id @default(uuid())
+  internId   String
+  mentorId   String
+  officeName String
+  region     String
+  division   String
+  position   String
+  startDate  DateTime       @db.Date
+  endDate    DateTime       @db.Date
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  intern     User           @relation("Intern", fields: [internId], references: [id])
+  mentor     User           @relation("Mentor", fields: [mentorId], references: [id])
+  activities Activity[]
+  reports    WeeklyReport[]
+  @@index([internId])
+  @@index([mentorId])
+}
+
+model Activity {
+  id           String                @id @default(uuid())
+  placementId  String
+  activityDate DateTime              @db.Date
+  startTime    String                @db.VarChar(5)
+  endTime      String                @db.VarChar(5)
+  description  String                @db.Text
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  placement    InternshipPlacement   @relation(fields: [placementId], references: [id], onDelete: Cascade)
+  @@unique([placementId, activityDate])
+  @@index([placementId, activityDate])
+}
+
+model WeeklyReport {
+  id                 String             @id @default(uuid())
+  placementId        String
+  weekStart           DateTime           @db.Date
+  weekIndex           Int
+  monthIndex          Int
+  status              ReportStatus       @default(DRAFT)
+  submittedAt         DateTime?
+  signedAt            DateTime?
+  signedById          String?
+  signatureVersionId  String?
+  returnReason        String?            @db.Text
+  revision            Int                @default(1)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  placement           InternshipPlacement @relation(fields: [placementId], references: [id], onDelete: Cascade)
+  signedBy            User?              @relation("SignedBy", fields: [signedById], references: [id], onDelete: Restrict)
+  signatureVersion    MentorSignature?   @relation(fields: [signatureVersionId], references: [id], onDelete: Restrict)
+  audits              ApprovalAudit[]
+  @@unique([placementId, weekStart])
+  @@index([placementId, weekStart])
+  @@index([status, weekStart])
+}
+
+model MentorSignature {
+  id        String         @id @default(uuid())
+  mentorId  String
+  filePath  String
+  sha256    String
+  createdAt DateTime       @default(now())
+  isCurrent Boolean        @default(true)
+  mentor    User           @relation(fields: [mentorId], references: [id])
+  reports   WeeklyReport[]
+  @@index([mentorId, isCurrent])
+}
+
+model ApprovalAudit {
+  id           String          @id @default(uuid())
+  reportId     String?
+  actorId      String
+  action       ApprovalAction
+  beforeStatus ReportStatus?
+  afterStatus  ReportStatus?
+  details      Json?
+  createdAt    DateTime        @default(now())
+  report       WeeklyReport?   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  actor        User            @relation(fields: [actorId], references: [id])
+  @@index([reportId, createdAt])
+}
+
+model RefreshSession {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, expiresAt])
+}

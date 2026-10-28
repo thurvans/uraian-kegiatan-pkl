@@ -1,0 +1,36 @@
+{
+  "name": "uraian-pkl-backend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "test": "node --test",
+    "prisma:generate": "prisma generate",
+    "prisma:validate": "prisma validate --schema prisma/schema.prisma",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:bootstrap": "node prisma/bootstrap.js",
+    "prisma:seed": "node prisma/seed.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.18.0",
+    "bcryptjs": "^3.0.2",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "helmet": "^8.1.0",
+    "jose": "^6.1.0",
+    "pdfkit": "^0.17.2",
+    "pino-http": "^11.0.0",
+    "pngjs": "^7.0.0",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "prisma": "^6.18.0"
+  },
+  "overrides": {
+    "deepmerge-ts": "^8.0.0"
+  }
+}
