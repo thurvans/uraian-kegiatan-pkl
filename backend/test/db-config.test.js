@@ -30,3 +30,20 @@ test('resolveDatabaseUrl: menggunakan direct DATABASE_URL standar integrasi Verc
   };
   assert.equal(resolveDatabaseUrl(env), 'postgres://direct_user:pass@db.prisma.io:5432/postgres');
 });
+
+test('resolveDatabaseUrl: mendeteksi otomatis prefix database dari Vercel (uraian_DATABASE_URL)', () => {
+  const env = {
+    uraian_DATABASE_URL: 'postgres://uraian_user:pass@db.prisma.io:5432/postgres',
+    uraian_PRISMA_DATABASE_URL: 'postgres://uraian_user:pass@db.prisma.io:5432/postgres',
+    uraian_POSTGRES_URL: 'postgres://uraian_user:pass@db.prisma.io:5432/postgres'
+  };
+  assert.equal(resolveDatabaseUrl(env), 'postgres://uraian_user:pass@db.prisma.io:5432/postgres');
+});
+
+test('resolveDatabaseUrl: mendeteksi otomatis prefix saat hanya uraian_PRISMA_DATABASE_URL atau uraian_POSTGRES_URL ada', () => {
+  const env = {
+    uraian_PRISMA_DATABASE_URL: 'postgres://prisma_user:pass@db.prisma.io:5432/postgres'
+  };
+  assert.equal(resolveDatabaseUrl(env), 'postgres://prisma_user:pass@db.prisma.io:5432/postgres');
+});
+

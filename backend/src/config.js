@@ -6,38 +6,100 @@ import { z } from 'zod';
 dotenv.config({ path: ['.env.local', '.env'], quiet: true });
 
 /**
- * Mendeteksi connection string Prisma Postgres resmi dari Vercel.
- * Integrasi resmi Prisma Postgres di Vercel Marketplace menyuntikkan:
- * - `DATABASE_URL`: connection string direct ke database Prisma Postgres.
- * - `PRISMA_DATABASE_URL`: alias resmi yang bernilai identik dengan DATABASE_URL.
- * - `POSTGRES_URL`: alias standar kompatibilitas Vercel Postgres.
- * - `DATABASE_URL_POOLED` / `POSTGRES_PRISMA_URL`: connection string pooled untuk query traffic tinggi di serverless.
+ * Mendeteksi connection string Prisma Postgres dari Vercel secara otomatis.
+ * Saat database dihubungkan di Vercel, Vercel menambahkan prefix nama database ke variabel,
+ * misalnya: `uraian_DATABASE_URL`, `uraian_PRISMA_DATABASE_URL`, `uraian_POSTGRES_URL`.
  */
 export function resolveDatabaseUrl(env = process.env) {
-  return (
-    env.DATABASE_URL_POOLED ||
-    env.POSTGRES_PRISMA_URL ||
-    env.DATABASE_URL ||
-    env.PRISMA_DATABASE_URL ||
-    env.POSTGRES_URL ||
-    ''
+  // 1. Cek langsung nama variabel standar (tanpa prefix)
+  if (env.DATABASE_URL_POOLED?.trim()) return env.DATABASE_URL_POOLED.trim();
+  if (env.POSTGRES_PRISMA_URL?.trim()) return env.POSTGRES_PRISMA_URL.trim();
+  if (env.DATABASE_URL?.trim()) return env.DATABASE_URL.trim();
+  if (env.PRISMA_DATABASE_URL?.trim()) return env.PRISMA_DATABASE_URL.trim();
+  if (env.POSTGRES_URL?.trim()) return env.POSTGRES_URL.trim();
+
+  // 2. Deteksi otomatis variabel yang diberi prefix oleh Vercel (seperti uraian_DATABASE_URL)
+  const entries = Object.entries(env);
+
+  // Cari connection pooling terlebih dahulu jika ada
+  const pooledEntry = entries.find(([key, val]) =>
+    typeof val === 'string' && val.trim() && (key.endsWith('_DATABASE_URL_POOLED') || key.endsWith('_POSTGRES_PRISMA_URL'))
   );
+  if (pooledEntry) return pooledEntry[1].trim();
+
+  // Cari *_DATABASE_URL (contoh: uraian_DATABASE_URL)
+  const directEntry = entries.find(([key, val]) =>
+    typeof val === 'string' && val.trim() && key.endsWith('_DATABASE_URL')
+  );
+  if (directEntry) return directEntry[1].trim();
+
+  // Cari *_PRISMA_DATABASE_URL (contoh: uraian_PRISMA_DATABASE_URL)
+  const prismaEntry = entries.find(([key, val]) =>
+    typeof val === 'string' && val.trim() && key.endsWith('_PRISMA_DATABASE_URL')
+  );
+  if (prismaEntry) return prismaEntry[1].trim();
+
+  // Cari *_POSTGRES_URL (contoh: uraian_POSTGRES_URL)
+  const postgresEntry = entries.find(([key, val]) =>
+    typeof val === 'string' && val.trim() && key.endsWith('_POSTGRES_URL')
+  );
+  if (postgresEntry) return postgresEntry[1].trim();
+
+  return '';
+}
+
+export function resolveDatabaseDirectUrl(env = process.env) {
+  if (env.DATABASE_URL_UNPOOLED?.trim()) return env.DATABASE_URL_UNPOOLED.trim();
+  if (env.POSTGRES_URL_NON_POOLING?.trim()) return env.POSTGRES_URL_NON_POOLING.trim();
+  if (env.DIRECT_URL?.trim()) return env.DIRECT_URL.trim();
+
+  const entries = Object.entries(env);
+  const unpooledEntry = entries.find(([key, val]) =>
+    typeof val === 'string' && val.trim() && (key.endsWith('_DATABASE_URL_UNPOOLED') || key.endsWith('_POSTGRES_URL_NON_POOLING') || key.endsWith('_DIRECT_URL'))
+  );
+  if (unpooledEntry) return unpooledEntry[1].trim();
+
+  return resolveDatabaseUrl(env);
+}
+
+export function resolveBlobCredentials(env = process.env) {
+  let storeId = typeof env.BLOB_STORE_ID === 'string' ? env.BLOB_STORE_ID.trim() : '';
+  let token = typeof env.BLOB_READ_WRITE_TOKEN === 'string' ? env.BLOB_READ_WRITE_TOKEN.trim() : '';
+
+  if (!storeId || !token) {
+    for (const [key, val] of Object.entries(env)) {
+      if (typeof val === 'string' && val.trim()) {
+        if (!storeId && key.endsWith('_BLOB_STORE_ID')) storeId = val.trim();
+        if (!token && key.endsWith('_BLOB_READ_WRITE_TOKEN')) token = val.trim();
+      }
+    }
+  }
+
+  return { storeId: storeId || undefined, token: token || undefined };
 }
 
 const autoDatabaseUrl = resolveDatabaseUrl(process.env);
-if (!process.env.DATABASE_URL && autoDatabaseUrl) {
+if (autoDatabaseUrl) {
   process.env.DATABASE_URL = autoDatabaseUrl;
+}
+
+const blobCreds = resolveBlobCredentials(process.env);
+if (!process.env.BLOB_STORE_ID && blobCreds.storeId) {
+  process.env.BLOB_STORE_ID = blobCreds.storeId;
+}
+if (!process.env.BLOB_READ_WRITE_TOKEN && blobCreds.token) {
+  process.env.BLOB_READ_WRITE_TOKEN = blobCreds.token;
 }
 
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
   DATABASE_URL: z.preprocess(
-    val => process.env.DATABASE_URL_POOLED || (typeof val === 'string' && val.trim() ? val.trim() : resolveDatabaseUrl()),
+    val => (typeof val === 'string' && val.trim() ? val.trim() : resolveDatabaseUrl(process.env)),
     z.string().min(1, 'DATABASE_URL wajib diisi atau dihubungkan melalui integrasi resmi Prisma Postgres di Vercel.')
   ),
   DATABASE_URL_DIRECT: z.preprocess(
-    val => val || process.env.DATABASE_URL_DIRECT || process.env.DATABASE_URL_UNPOOLED || process.env.POSTGRES_URL_NON_POOLING || process.env.DATABASE_URL || undefined,
+    val => (typeof val === 'string' && val.trim() ? val.trim() : resolveDatabaseDirectUrl(process.env)),
     z.string().optional()
   ),
   JWT_ISSUER: z.string().default('pkl-activity'),
@@ -49,19 +111,18 @@ const schema = z.object({
   REQUEST_BODY_LIMIT: z.string().regex(/^\d+(kb|mb)$/i).default('2mb'),
   COOKIE_SAME_SITE: z.enum(['lax', 'none', 'strict']).default('lax'),
   // Vercel Blob (private store). Dibaca langsung oleh SDK dari process.env.
-  BLOB_STORE_ID: z.preprocess(v => v || undefined, z.string().optional()),
-  BLOB_READ_WRITE_TOKEN: z.preprocess(v => v || undefined, z.string().optional()),
+  BLOB_STORE_ID: z.preprocess(
+    v => (typeof v === 'string' && v.trim() ? v.trim() : resolveBlobCredentials(process.env).storeId),
+    z.string().optional()
+  ),
+  BLOB_READ_WRITE_TOKEN: z.preprocess(
+    v => (typeof v === 'string' && v.trim() ? v.trim() : resolveBlobCredentials(process.env).token),
+    z.string().optional()
+  ),
   APP_TIMEZONE: z.string().default('Asia/Jakarta'),
   PDF_EXPORT_MAX_REPORTS: z.coerce.number().int().min(1).max(100).default(30)
 }).superRefine((value, context) => {
   if (value.NODE_ENV === 'test') return;
-  if (!value.DATABASE_URL) {
-    context.addIssue({
-      code: 'custom',
-      path: ['DATABASE_URL'],
-      message: 'Koneksi database belum tersedia. Hubungkan Prisma Postgres di tab Storage/Marketplace Vercel.'
-    });
-  }
   if (!value.BLOB_STORE_ID && !value.BLOB_READ_WRITE_TOKEN) {
     if (value.NODE_ENV === 'production') {
       context.addIssue({ code: 'custom', path: ['BLOB_STORE_ID'], message: 'Hubungkan Vercel Blob store (BLOB_STORE_ID) atau isi BLOB_READ_WRITE_TOKEN.' });
