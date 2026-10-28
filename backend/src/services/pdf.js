@@ -1,7 +1,7 @@
-import fs from 'node:fs';
 import PDFDocument from 'pdfkit';
 import { PNG } from 'pngjs';
 import { formatDateId } from '../lib/dates.js';
+import { readSignatureBuffer } from '../lib/blob-storage.js';
 
 // Mengikuti template Word: margin 1 inci dan tabel 9.000 twip (450 pt).
 const margins = { top: 72, bottom: 72, left: 72, right: 72 };
@@ -10,10 +10,10 @@ const tableWidth = widths.reduce((total, width) => total + width, 0);
 const signatureCache = new Map();
 const SIGNATURE_CACHE_LIMIT = 100;
 
-function normalizedSignature(filePath) {
+function normalizedSignature(filePath, raw) {
   if (signatureCache.has(filePath)) return signatureCache.get(filePath);
   try {
-    const source = PNG.sync.read(fs.readFileSync(filePath));
+    const source = PNG.sync.read(raw);
     let minX = source.width, minY = source.height, maxX = -1, maxY = -1;
     const isInk = offset => source.data[offset + 3] > 5
       && (source.data[offset] < 245 || source.data[offset + 1] < 245 || source.data[offset + 2] < 245);
@@ -26,7 +26,7 @@ function normalizedSignature(filePath) {
         minY = Math.min(minY, y); maxY = Math.max(maxY, y);
       }
     }
-    if (maxX < minX || maxY < minY) return filePath;
+    if (maxX < minX || maxY < minY) return raw;
 
     const inkWidth = maxX - minX + 1, inkHeight = maxY - minY + 1;
     const padding = Math.max(3, Math.round(Math.max(inkWidth, inkHeight) * .06));
@@ -50,8 +50,20 @@ function normalizedSignature(filePath) {
     signatureCache.set(filePath, result);
     return result;
   } catch {
-    return filePath;
+    return raw;
   }
+}
+
+// Unduh tanda tangan dari Vercel Blob (private) sebelum render, karena PDFKit bekerja sinkron.
+async function loadSignatures(reports) {
+  const paths = [...new Set(reports.map(report => report.signatureVersion?.filePath).filter(Boolean))];
+  const images = new Map();
+  await Promise.all(paths.map(async filePath => {
+    if (signatureCache.has(filePath)) return images.set(filePath, signatureCache.get(filePath));
+    const raw = await readSignatureBuffer(filePath).catch(() => null);
+    if (raw) images.set(filePath, normalizedSignature(filePath, raw));
+  }));
+  return images;
 }
 
 function centered(doc, text, size = 10, bold = false) {
@@ -105,8 +117,8 @@ function tableHeader(doc) {
   doc.y = y + height;
 }
 
-function drawRow(doc, report, activity, index) {
-  const signaturePath = report.signatureVersion?.filePath;
+function drawRow(doc, report, activity, index, images) {
+  const signatureImage = images.get(report.signatureVersion?.filePath);
   const descriptionOptions = { width: widths[3] - 10, lineGap: 1 };
   const descriptionHeight = doc.font('Times-Roman').fontSize(8.5).heightOfString(activity.description, descriptionOptions);
   const rowHeight = Math.max(46, Math.min(160, descriptionHeight + 12));
@@ -142,9 +154,9 @@ function drawRow(doc, report, activity, index) {
     x += widths[columnIndex];
   });
 
-  if (signaturePath && fs.existsSync(signaturePath)) {
+  if (signatureImage) {
     try {
-      doc.image(normalizedSignature(signaturePath), x + 4, y + 4, {
+      doc.image(signatureImage, x + 4, y + 4, {
         fit: [widths[4] - 8, rowHeight - 8],
         align: 'center',
         valign: 'center'
@@ -155,6 +167,7 @@ function drawRow(doc, report, activity, index) {
 }
 
 export async function buildPdf(res, reports, fileName) {
+  const images = await loadSignatures(reports);
   const doc = new PDFDocument({
     size: 'A4',
     margins,
@@ -171,7 +184,7 @@ export async function buildPdf(res, reports, fileName) {
     }
     reportHeader(doc, report, reportIndex === 0);
     tableHeader(doc);
-    report.activities.forEach((activity, index) => drawRow(doc, report, activity, index));
+    report.activities.forEach((activity, index) => drawRow(doc, report, activity, index, images));
   });
   doc.end();
 }

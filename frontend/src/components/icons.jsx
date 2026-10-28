@@ -12,9 +12,12 @@ import {
   faClipboardCheck,
   faClock,
   faDownload,
+  faEnvelope,
   faEye,
+  faEyeSlash,
   faFileLines,
   faFloppyDisk,
+  faLock,
   faPaperPlane,
   faPenNib,
   faPlus,
@@ -46,10 +49,13 @@ export const ChevronRight = createIcon(faChevronRight);
 export const ClipboardCheck = createIcon(faClipboardCheck);
 export const Clock3 = createIcon(faClock);
 export const Download = createIcon(faDownload);
+export const Envelope = createIcon(faEnvelope);
 export const Eye = createIcon(faEye);
+export const EyeOff = createIcon(faEyeSlash);
 export const FileText = createIcon(faFileLines);
 export const LayoutDashboard = createIcon(faTableColumns);
 export const LogOut = createIcon(faRightFromBracket);
+export const Lock = createIcon(faLock);
 export const Menu = createIcon(faBars);
 export const PenLine = createIcon(faPenNib);
 export const Plus = createIcon(faPlus);

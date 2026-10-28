@@ -1,4 +1,6 @@
 node_modules/
 .env
+.env*.local
+.vercel
 storage/private/signatures/*.png
 !storage/private/signatures/.gitkeep
