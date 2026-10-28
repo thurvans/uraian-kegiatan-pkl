@@ -19,7 +19,27 @@ const activitySchema = z.object({
 });
 
 async function placementOf(userId) {
-  const placement = await prisma.internshipPlacement.findFirst({ where: { internId: userId } });
+  let placement = await prisma.internshipPlacement.findFirst({ where: { internId: userId } });
+  if (!placement) {
+    const mentor = await prisma.user.findFirst({ where: { role: 'MENTOR', isActive: true }, orderBy: { createdAt: 'asc' } });
+    if (mentor) {
+      const today = new Date();
+      const startDate = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+      const endDate = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 3, 0));
+      placement = await prisma.internshipPlacement.create({
+        data: {
+          internId: userId,
+          mentorId: mentor.id,
+          officeName: 'Instansi / Kantor PKL',
+          region: 'Jakarta',
+          division: 'Divisi Magang',
+          position: 'Peserta PKL',
+          startDate,
+          endDate
+        }
+      });
+    }
+  }
   if (!placement) throw appError(404, 'Penempatan PKL belum tersedia.');
   return placement;
 }

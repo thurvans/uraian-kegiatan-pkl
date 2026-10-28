@@ -117,7 +117,7 @@ export default function DashboardPage({ role }) {
                 </span>
                 <span className="inline-flex items-center gap-2">
                   <UserRound size={16} className="text-blue-600" />
-                  Mentor: {placement.mentor.name}
+                  Mentor: {placement.mentor?.name || 'Mentor Pembimbing'}
                 </span>
               </div>
             </div>
