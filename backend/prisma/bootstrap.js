@@ -1,7 +1,20 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
 import { PrismaClient, Role } from '@prisma/client';
 import { z } from 'zod';
+
+dotenv.config({ path: ['.env.local', '.env'], quiet: true });
+
+const databaseUrl =
+  process.env.DATABASE_URL_UNPOOLED ||
+  process.env.POSTGRES_URL_NON_POOLING ||
+  process.env.DATABASE_URL ||
+  process.env.PRISMA_DATABASE_URL ||
+  process.env.POSTGRES_URL;
+
+if (!process.env.DATABASE_URL && databaseUrl) {
+  process.env.DATABASE_URL = databaseUrl;
+}
 
 const input = z.object({
   BOOTSTRAP_MENTOR_NAME: z.string().trim().min(2).max(80),
@@ -28,7 +41,7 @@ if (Number.isNaN(+startDate) || Number.isNaN(+endDate) || endDate < startDate) {
   throw new Error('Periode bootstrap tidak valid.');
 }
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient(databaseUrl ? { datasources: { db: { url: databaseUrl } } } : undefined);
 try {
   if (await prisma.user.count()) {
     throw new Error('Bootstrap ditolak karena database sudah memiliki pengguna.');

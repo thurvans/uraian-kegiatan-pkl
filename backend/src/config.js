@@ -1,14 +1,45 @@
 import dotenv from 'dotenv';
 import { z } from 'zod';
 
-// `.env.local` dibuat oleh `vercel env pull` (berisi VERCEL_OIDC_TOKEN & BLOB_STORE_ID).
-// Dimuat ke process.env agar @vercel/blob dapat membaca kredensial OIDC secara otomatis.
+// `.env.local` dibuat oleh `vercel env pull` (berisi variabel Vercel OIDC, Blob, & Prisma Postgres).
+// Dimuat ke process.env agar kredensial dapat dibaca secara otomatis baik lokal maupun produksi.
 dotenv.config({ path: ['.env.local', '.env'], quiet: true });
+
+/**
+ * Mendeteksi connection string Prisma Postgres resmi dari Vercel.
+ * Integrasi resmi Prisma Postgres di Vercel Marketplace menyuntikkan:
+ * - `DATABASE_URL`: connection string direct ke database Prisma Postgres.
+ * - `PRISMA_DATABASE_URL`: alias resmi yang bernilai identik dengan DATABASE_URL.
+ * - `POSTGRES_URL`: alias standar kompatibilitas Vercel Postgres.
+ * - `DATABASE_URL_POOLED` / `POSTGRES_PRISMA_URL`: connection string pooled untuk query traffic tinggi di serverless.
+ */
+export function resolveDatabaseUrl(env = process.env) {
+  return (
+    env.DATABASE_URL_POOLED ||
+    env.POSTGRES_PRISMA_URL ||
+    env.DATABASE_URL ||
+    env.PRISMA_DATABASE_URL ||
+    env.POSTGRES_URL ||
+    ''
+  );
+}
+
+const autoDatabaseUrl = resolveDatabaseUrl(process.env);
+if (!process.env.DATABASE_URL && autoDatabaseUrl) {
+  process.env.DATABASE_URL = autoDatabaseUrl;
+}
 
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
-  DATABASE_URL: z.string().min(1),
+  DATABASE_URL: z.preprocess(
+    val => process.env.DATABASE_URL_POOLED || (typeof val === 'string' && val.trim() ? val.trim() : resolveDatabaseUrl()),
+    z.string().min(1, 'DATABASE_URL wajib diisi atau dihubungkan melalui integrasi resmi Prisma Postgres di Vercel.')
+  ),
+  DATABASE_URL_DIRECT: z.preprocess(
+    val => val || process.env.DATABASE_URL_DIRECT || process.env.DATABASE_URL_UNPOOLED || process.env.POSTGRES_URL_NON_POOLING || process.env.DATABASE_URL || undefined,
+    z.string().optional()
+  ),
   JWT_ISSUER: z.string().default('pkl-activity'),
   JWT_AUDIENCE: z.string().default('pkl-web'),
   JWT_ACCESS_TTL_MINUTES: z.coerce.number().int().positive().default(15),
@@ -24,6 +55,13 @@ const schema = z.object({
   PDF_EXPORT_MAX_REPORTS: z.coerce.number().int().min(1).max(100).default(30)
 }).superRefine((value, context) => {
   if (value.NODE_ENV === 'test') return;
+  if (!value.DATABASE_URL) {
+    context.addIssue({
+      code: 'custom',
+      path: ['DATABASE_URL'],
+      message: 'Koneksi database belum tersedia. Hubungkan Prisma Postgres di tab Storage/Marketplace Vercel.'
+    });
+  }
   if (!value.BLOB_STORE_ID && !value.BLOB_READ_WRITE_TOKEN) {
     if (value.NODE_ENV === 'production') {
       context.addIssue({ code: 'custom', path: ['BLOB_STORE_ID'], message: 'Hubungkan Vercel Blob store (BLOB_STORE_ID) atau isi BLOB_READ_WRITE_TOKEN.' });
