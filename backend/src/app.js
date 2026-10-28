@@ -50,3 +50,6 @@ app.use('/api/v1/signatures', signaturesRouter);
 app.use('/api/v1', pdfRouter);
 app.use(notFound);
 app.use(errorHandler);
+
+// Vercel mendeteksi Express dari default export pada entrypoint yang dikenali.
+export default app;

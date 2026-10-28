@@ -8,7 +8,12 @@ import { appError } from '../middleware/error.js';
 import { config } from '../config.js';
 
 export const authRouter = Router();
-const cookie = { httpOnly: true, secure: config.NODE_ENV === 'production', sameSite: 'lax', path: '/api/v1/auth' };
+const cookie = {
+  httpOnly: true,
+  secure: config.NODE_ENV === 'production',
+  sameSite: config.COOKIE_SAME_SITE,
+  path: '/api/v1/auth'
+};
 
 authRouter.post('/login', async (req, res) => {
   const input = z.object({ email: z.string().email(), password: z.string().min(8).max(128) }).parse(req.body);

@@ -4,10 +4,11 @@ MVP sesuai `PRD_Uraian_Kegiatan_PKL.md`, terdiri dari Express + Prisma/PostgreSQ
 
 ## Menjalankan lokal
 
-Prasyarat: Node.js 20+, npm, PostgreSQL 15+ (atau Docker).
+Prasyarat: Node.js 22.x, npm, dan PostgreSQL 15+ yang berjalan secara lokal atau melalui penyedia database.
 
-1. Jalankan PostgreSQL: `docker compose up -d postgres`.
-2. Salin `backend/.env.example` menjadi `backend/.env` dan ganti `JWT_SIGNING_SECRET` dengan string acak minimal 32 karakter.
+1. Buat database PostgreSQL, lalu pastikan service PostgreSQL aktif dan dapat diakses.
+2. Salin `backend/.env.example` menjadi `backend/.env`. Sesuaikan `DATABASE_URL` dan ganti
+   `JWT_SIGNING_SECRET` dengan string acak minimal 32 karakter.
 3. Salin `frontend/.env.example` menjadi `frontend/.env`. Vite akan meneruskan `/api` ke backend lokal.
 4. Instal dependency deterministik dari lockfile: `npm run install:all`.
 5. Terapkan migrasi database: `npx prisma migrate deploy --schema backend/prisma/schema.prisma`.
@@ -28,85 +29,45 @@ Ganti kredensial seed untuk lingkungan non-demo.
 
 Seed demo otomatis ditolak ketika `NODE_ENV=production`.
 
-## Deployment production dengan Docker Compose
+## Deployment ke Vercel (dua project)
 
-Prasyarat server: Docker Engine, Docker Compose v2, sebuah domain, dan reverse proxy TLS
-(misalnya Caddy atau Nginx) pada host.
+Repository ini dideploy sebagai dua Vercel Project dari repository Git yang sama. Konfigurasi berada di
+folder aplikasi masing-masing, bukan di root repository.
 
-1. Salin `.env.production.example` menjadi `.env.production`.
-2. Ganti seluruh placeholder. Gunakan secret JWT acak minimal 32 karakter dan password database yang panjang.
-3. Pastikan `FRONTEND_URL` sama persis dengan URL HTTPS publik, tanpa slash di akhir.
-4. Validasi konfigurasi tanpa menjalankan service:
+1. Import repository sebagai project backend dan pilih **Root Directory** `backend`. Jangan isi Build
+   Command atau Output Directory; preset Express mendeteksi `src/app.js` secara otomatis.
+2. Isi environment backend dari `backend/.env.production.example`. Gunakan URL HTTPS frontend yang
+   sebenarnya untuk `FRONTEND_URL`, database PostgreSQL eksternal untuk `DATABASE_URL`, dan secret acak
+   minimal 32 karakter untuk `JWT_SIGNING_SECRET`.
+3. Jalankan migrasi terhadap database production dari CI atau mesin administrasi sebelum backend menerima
+   trafik: `npx prisma migrate deploy --schema backend/prisma/schema.prisma`.
+4. Import repository sekali lagi sebagai project frontend dan pilih **Root Directory** `frontend`. Isi
+   `VITE_API_URL` dengan URL backend ditambah `/api/v1`, lalu deploy menggunakan preset Vite.
+5. Jika frontend dan backend berada pada site/domain yang berbeda, gunakan `COOKIE_SAME_SITE=none`. Jika
+   keduanya memakai subdomain dari domain registrable yang sama, `lax` dapat digunakan.
 
-   ```sh
-   docker compose --env-file .env.production -f docker-compose.prod.yml config --quiet
-   ```
+`frontend/vercel.json` menangani deep link React Router, sedangkan `backend/vercel.json` memilih preset
+Express. Node.js dipatok ke 22.x pada `package.json` masing-masing aplikasi.
 
-5. Build dan jalankan database, migrasi, API, serta frontend:
-
-   ```sh
-   docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
-   docker compose --env-file .env.production -f docker-compose.prod.yml ps
-   ```
-
-6. Arahkan reverse proxy TLS ke `127.0.0.1:8080`. Contoh Caddy:
-
-   ```caddyfile
-   pkl.example.com {
-       reverse_proxy 127.0.0.1:8080
-   }
-   ```
-
-   Port aplikasi hanya di-bind ke loopback; jangan dibuka langsung ke internet tanpa HTTPS.
-
-7. Periksa readiness melalui URL publik:
-
-   ```sh
-   curl --fail https://pkl.example.com/api/v1/health/ready
-   ```
-
-Migrasi dijalankan oleh service `migrate` sebelum backend dimulai. Frontend menggunakan API same-origin
-`/api/v1`, sehingga refresh cookie tidak bergantung pada third-party cookie.
+> **Batasan penyimpanan tanda tangan:** filesystem Vercel Function bersifat read-only kecuali `/tmp`, dan
+> isi `/tmp` tidak persisten. Nilai `/tmp/signatures` pada contoh hanya membuat request tulis dapat berjalan;
+> tanda tangan tetap harus dipindahkan ke object storage persisten (misalnya Vercel Blob atau S3) sebelum
+> fitur tanda tangan dianggap siap production di Vercel.
 
 ### Bootstrap akun production pertama
 
-Jangan menjalankan seed demo. Pada database kosong, jalankan bootstrap satu kali dengan seluruh variabel
-`BOOTSTRAP_*` di bawah. Password minimal 12 karakter dan tidak pernah dicetak ke log.
+Jangan menjalankan seed demo. Pada database kosong, siapkan `DATABASE_URL` production dan seluruh variabel
+`BOOTSTRAP_*` berikut pada shell atau CI yang aman, lalu jalankan `npm run prisma:bootstrap --prefix backend`:
 
-```sh
-docker compose --env-file .env.production -f docker-compose.prod.yml run --rm \
-  -e BOOTSTRAP_MENTOR_NAME='Nama Mentor' \
-  -e BOOTSTRAP_MENTOR_EMAIL='mentor@example.com' \
-  -e BOOTSTRAP_MENTOR_PASSWORD='ganti-password-kuat' \
-  -e BOOTSTRAP_INTERN_NAME='Nama Peserta' \
-  -e BOOTSTRAP_INTERN_EMAIL='peserta@example.com' \
-  -e BOOTSTRAP_INTERN_PASSWORD='ganti-password-kuat' \
-  -e BOOTSTRAP_OFFICE_NAME='Nama Kantor' \
-  -e BOOTSTRAP_REGION='Nama Wilayah' \
-  -e BOOTSTRAP_DIVISION='Nama Bagian' \
-  -e BOOTSTRAP_POSITION='Posisi PKL' \
-  -e BOOTSTRAP_START_DATE='2026-01-01' \
-  -e BOOTSTRAP_END_DATE='2026-06-30' \
-  backend npm run prisma:bootstrap
-```
+- `BOOTSTRAP_MENTOR_NAME`, `BOOTSTRAP_MENTOR_EMAIL`, dan `BOOTSTRAP_MENTOR_PASSWORD`.
+- `BOOTSTRAP_INTERN_NAME`, `BOOTSTRAP_INTERN_EMAIL`, dan `BOOTSTRAP_INTERN_PASSWORD`.
+- `BOOTSTRAP_OFFICE_NAME`, `BOOTSTRAP_REGION`, `BOOTSTRAP_DIVISION`, dan `BOOTSTRAP_POSITION`.
+- `BOOTSTRAP_START_DATE` dan `BOOTSTRAP_END_DATE` dalam format `YYYY-MM-DD`.
+
+Password bootstrap minimal 12 karakter dan tidak pernah dicetak ke log.
 
 Bootstrap menolak berjalan apabila database sudah memiliki pengguna, sehingga tidak dapat mereset akun
 yang sudah ada secara tidak sengaja.
-
-### Backup dan pemulihan
-
-Database dan volume tanda tangan adalah satu kesatuan backup. Ambil backup ketika tidak ada proses
-penandatanganan yang sedang berlangsung.
-
-```sh
-docker compose --env-file .env.production -f docker-compose.prod.yml exec -T postgres \
-  sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > pkl-database.dump
-docker run --rm -v uraianpkl_pkl_signatures:/data -v "$PWD:/backup" alpine \
-  tar czf /backup/pkl-signatures.tar.gz -C /data .
-```
-
-Uji prosedur restore secara berkala di environment terpisah. Jangan menganggap backup berhasil sebelum
-restore pernah diverifikasi.
 
 ## Alur utama
 
@@ -119,7 +80,7 @@ restore pernah diverifikasi.
 
 - Access JWT disimpan dalam memori browser; refresh token di cookie HttpOnly dan hash sesi disimpan di PostgreSQL.
 - File PNG tanda tangan disimpan di `backend/storage/private/signatures`, bukan direktori publik.
-- Compose production menyediakan volume persisten terpisah untuk database dan signature; TLS tetap ditangani reverse proxy host.
+- Pada Vercel, file tanda tangan harus menggunakan object storage persisten sebelum aplikasi dipakai di production.
 - `/api/v1/health/live` memeriksa proses API dan `/api/v1/health/ready` juga memeriksa koneksi database.
 
 ## Pemeriksaan
@@ -141,5 +102,5 @@ restore pernah diverifikasi.
 - `frontend/src/components/reports`: tabel, empty state, dan detail laporan bersama.
 - `frontend/src/utils`: formatter dan fungsi murni tanpa state React.
 
-Konfigurasi backend divalidasi saat proses dimulai. Untuk deployment di belakang reverse proxy,
-atur `TRUST_PROXY` sesuai jumlah proxy tepercaya dan jangan gunakan nilai lebih luas dari topologi aktual.
+Konfigurasi backend divalidasi saat proses dimulai. Atur `TRUST_PROXY` sesuai jumlah proxy tepercaya dan
+jangan gunakan nilai lebih luas dari topologi deployment aktual.

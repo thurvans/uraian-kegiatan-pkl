@@ -2,6 +2,9 @@
   "name": "uraian-pkl-backend",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
@@ -10,7 +13,8 @@
     "prisma:validate": "prisma validate --schema prisma/schema.prisma",
     "prisma:migrate": "prisma migrate dev",
     "prisma:bootstrap": "node prisma/bootstrap.js",
-    "prisma:seed": "node prisma/seed.js"
+    "prisma:seed": "node prisma/seed.js",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@prisma/client": "^6.18.0",

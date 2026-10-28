@@ -12,6 +12,7 @@ const schema = z.object({
   FRONTEND_URL: z.string().url().default('http://localhost:5173'),
   TRUST_PROXY: z.coerce.number().int().min(0).max(3).default(0),
   REQUEST_BODY_LIMIT: z.string().regex(/^\d+(kb|mb)$/i).default('2mb'),
+  COOKIE_SAME_SITE: z.enum(['lax', 'none', 'strict']).default('lax'),
   SIGNATURE_STORAGE_DIR: z.string().default('./storage/private/signatures'),
   APP_TIMEZONE: z.string().default('Asia/Jakarta'),
   PDF_EXPORT_MAX_REPORTS: z.coerce.number().int().min(1).max(100).default(30)
