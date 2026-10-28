@@ -38,19 +38,23 @@ authRouter.post('/refresh', async (req, res) => {
   if (!raw) throw appError(401, 'Refresh session tidak tersedia.');
   const tokenHash = hashToken(raw);
   const session = await prisma.refreshSession.findUnique({ where: { tokenHash }, include: { user: true } });
-  
+
   if (!session) throw appError(401, 'Refresh session tidak valid.');
-  
-  // Tangani kemungkinan race condition (mis. React StrictMode atau concurrent request).
-  // Berikan grace period 30 detik jika sesi baru saja dirotasi.
+
+  // Tangani kemungkinan sesi yang baru di-revoke (grace period 60 detik)
   if (session.revokedAt) {
-    const isRecent = (Date.now() - session.revokedAt.getTime()) < 30_000;
+    const isRecent = (Date.now() - session.revokedAt.getTime()) < 60_000;
     if (isRecent && session.user?.isActive && session.expiresAt > new Date()) {
-      const accessToken = await createAccessToken(session.user);
+      const next = randomToken();
+      await prisma.refreshSession.create({
+        data: { userId: session.userId, tokenHash: hashToken(next), expiresAt: new Date(Date.now() + 30 * 86_400_000) }
+      });
+      res.cookie('refresh_token', next, { ...cookie, maxAge: 30 * 86_400_000 });
       return res.json({
         success: true,
         data: {
-          accessToken,
+          accessToken: await createAccessToken(session.user),
+          refreshToken: next,
           user: { id: session.user.id, name: session.user.name, email: session.user.email, role: session.user.role }
         }
       });
@@ -60,17 +64,18 @@ authRouter.post('/refresh', async (req, res) => {
 
   if (session.expiresAt <= new Date() || !session.user?.isActive) throw appError(401, 'Refresh session tidak valid.');
 
-  const next = randomToken();
-  await prisma.$transaction([
-    prisma.refreshSession.update({ where: { id: session.id }, data: { revokedAt: new Date() } }),
-    prisma.refreshSession.create({ data: { userId: session.userId, tokenHash: hashToken(next), expiresAt: new Date(Date.now() + 30 * 86_400_000) } })
-  ]);
-  res.cookie('refresh_token', next, { ...cookie, maxAge: 30 * 86_400_000 });
+  // Perpanjang masa berlaku sesi refresh aktif (sliding expiration 30 hari)
+  await prisma.refreshSession.update({
+    where: { id: session.id },
+    data: { expiresAt: new Date(Date.now() + 30 * 86_400_000) }
+  });
+
+  res.cookie('refresh_token', raw, { ...cookie, maxAge: 30 * 86_400_000 });
   res.json({
     success: true,
     data: {
       accessToken: await createAccessToken(session.user),
-      refreshToken: next,
+      refreshToken: raw,
       user: { id: session.user.id, name: session.user.name, email: session.user.email, role: session.user.role }
     }
   });

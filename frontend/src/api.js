@@ -7,10 +7,12 @@ const AUTH_STORAGE_KEY = 'uraian_pkl_auth';
 export function parseJwt(token) {
   try {
     const base64Url = token.split('.')[1];
+    if (!base64Url) return null;
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64.padEnd(base64.length + (4 - (base64.length % 4)) % 4, '=');
     const jsonPayload = decodeURIComponent(
       window
-        .atob(base64)
+        .atob(padded)
         .split('')
         .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
         .join('')
@@ -43,7 +45,7 @@ export function saveSession({ accessToken: newAccessToken, user, refreshToken })
     const current = getStoredSession() || {};
     const session = {
       accessToken: newAccessToken || current.accessToken || null,
-      refreshToken: refreshToken !== undefined ? refreshToken : current.refreshToken || null,
+      refreshToken: refreshToken !== undefined ? (refreshToken || current.refreshToken || null) : (current.refreshToken || null),
       user: user || current.user || null
     };
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
@@ -130,18 +132,22 @@ export async function refreshAccessToken() {
       .then(async response => {
         const payload = await parsePayload(response);
         if (!response.ok) {
-          clearSession();
+          if (response.status === 401 || response.status === 403) {
+            clearSession();
+          }
           throw new ApiError(payload?.message || 'Sesi telah berakhir.', { status: response.status });
         }
         saveSession({
           accessToken: payload.data.accessToken,
-          refreshToken: payload.data.refreshToken,
+          refreshToken: payload.data.refreshToken || stored?.refreshToken,
           user: payload.data.user
         });
         return payload.data;
       })
       .catch(error => {
-        clearSession();
+        if (error?.status === 401 || error?.status === 403) {
+          clearSession();
+        }
         throw error;
       })
       .finally(() => {

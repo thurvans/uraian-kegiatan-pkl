@@ -18,8 +18,9 @@ function AppLoading() {
 export function AuthProvider({ children }) {
   const initialSession = getStoredSession();
   const hasValidToken = Boolean(initialSession?.accessToken && isTokenValid(initialSession.accessToken));
+  const hasSavedUser = Boolean(initialSession?.user && (hasValidToken || initialSession?.refreshToken));
 
-  const [user, setUser] = useState(() => (hasValidToken ? initialSession.user : null));
+  const [user, setUser] = useState(() => (hasSavedUser ? initialSession.user : null));
   const [ready, setReady] = useState(() => hasValidToken);
 
   useEffect(() => {
@@ -27,6 +28,14 @@ export function AuthProvider({ children }) {
 
     async function restoreSession() {
       const stored = getStoredSession();
+
+      if (!stored?.accessToken && !stored?.refreshToken) {
+        if (active) {
+          setUser(null);
+          setReady(true);
+        }
+        return;
+      }
 
       // Kasus 1: Access token masih valid (masa berlaku 30 menit)
       if (stored?.accessToken && isTokenValid(stored.accessToken)) {
@@ -42,7 +51,7 @@ export function AuthProvider({ children }) {
             saveSession({ user: me.data });
           }
         } catch (err) {
-          if (err?.status === 401 && active) {
+          if ((err?.status === 401 || err?.status === 403) && active) {
             clearSession();
             setUser(null);
           }
@@ -56,8 +65,8 @@ export function AuthProvider({ children }) {
         if (active && result?.user) {
           setUser(result.user);
         }
-      } catch {
-        if (active) {
+      } catch (err) {
+        if (active && (err?.status === 401 || err?.status === 403)) {
           clearSession();
           setUser(null);
         }

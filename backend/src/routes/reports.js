@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import { appError } from '../middleware/error.js';
-import { reportRange } from '../lib/dates.js';
+import { indices, reportRange } from '../lib/dates.js';
 import { attachActivities } from '../services/report-activities.js';
 
 export const reportsRouter = Router();
@@ -11,10 +11,74 @@ reportsRouter.use(authenticate);
 
 function scope(user) { return user.role === 'MAGANG' ? { placement: { internId: user.id } } : { placement: { mentorId: user.id } }; }
 
+async function ensureInternReports(userId) {
+  let placement = await prisma.internshipPlacement.findFirst({ where: { internId: userId } });
+  if (!placement) {
+    const mentor = await prisma.user.findFirst({ where: { role: 'MENTOR', isActive: true }, orderBy: { createdAt: 'asc' } });
+    if (mentor) {
+      const today = new Date();
+      const startDate = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+      const endDate = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 3, 0));
+      placement = await prisma.internshipPlacement.create({
+        data: {
+          internId: userId,
+          mentorId: mentor.id,
+          officeName: 'Instansi / Kantor PKL',
+          region: 'Jakarta',
+          division: 'Divisi Magang',
+          position: 'Peserta PKL',
+          startDate,
+          endDate
+        }
+      });
+    }
+  }
+  if (!placement) return;
+
+  const activities = await prisma.activity.findMany({
+    where: { placementId: placement.id },
+    select: { activityDate: true }
+  });
+  if (!activities.length) return;
+
+  const existingReports = await prisma.weeklyReport.findMany({
+    where: { placementId: placement.id },
+    select: { weekStart: true }
+  });
+  const existingStarts = new Set(existingReports.map(r => r.weekStart.toISOString().slice(0, 10)));
+
+  for (const act of activities) {
+    const meta = indices(placement.startDate, act.activityDate);
+    const key = meta.weekStart.toISOString().slice(0, 10);
+    if (!existingStarts.has(key)) {
+      existingStarts.add(key);
+      await prisma.weeklyReport.upsert({
+        where: { placementId_weekStart: { placementId: placement.id, weekStart: meta.weekStart } },
+        update: {},
+        create: { placementId: placement.id, ...meta }
+      });
+    }
+  }
+}
+
 reportsRouter.get('/', async (req, res) => {
+  if (req.user.role === 'MAGANG') {
+    await ensureInternReports(req.user.id).catch(() => {});
+  }
   const allowed = ['DRAFT', 'SUBMITTED', 'RETURNED', 'SIGNED'];
   const status = req.query.status && allowed.includes(req.query.status) ? req.query.status : undefined;
-  const reports = await prisma.weeklyReport.findMany({ where: { ...scope(req.user), ...(status ? { status } : {}) }, include: { placement: { include: { intern: { select: { id: true, name: true } }, mentor: { select: { id: true, name: true } } } } }, orderBy: { weekStart: 'desc' } });
+  const reports = await prisma.weeklyReport.findMany({
+    where: { ...scope(req.user), ...(status ? { status } : {}) },
+    include: {
+      placement: {
+        include: {
+          intern: { select: { id: true, name: true } },
+          mentor: { select: { id: true, name: true } }
+        }
+      }
+    },
+    orderBy: { weekStart: 'desc' }
+  });
   res.json({ success: true, data: await attachActivities(reports) });
 });
 

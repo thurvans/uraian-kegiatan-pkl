@@ -42,9 +42,14 @@ function StatCard({ label, value, icon: Icon, tone }) {
 
 export default function DashboardPage({ role }) {
   const [reports, setReports] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [placement, setPlacement] = useState(null);
   useEffect(() => {
-    api("/reports").then((result) => setReports(result.data));
+    setLoading(true);
+    api("/reports")
+      .then((result) => setReports(result?.data || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
     if (role === "MAGANG")
       api("/placements/me")
         .then((result) => setPlacement(result.data))
@@ -146,7 +151,7 @@ export default function DashboardPage({ role }) {
             Lihat semua
           </NavLink>
         </div>
-        <ReportTable reports={reports.slice(0, 5)} />
+        <ReportTable reports={reports.slice(0, 5)} loading={loading} />
       </section>
     </Page>
   );
