@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma.js';
-import { reportRange } from '../lib/dates.js';
+import { dateOnly, mondayOf, reportRange } from '../lib/dates.js';
 
 export async function attachActivities(reports, client = prisma) {
   if (!reports.length) return [];
@@ -14,14 +14,16 @@ export async function attachActivities(reports, client = prisma) {
     orderBy: { activityDate: 'asc' }
   });
 
-  return reports.map(report => {
-    const range = reportRange(report.weekStart);
-    return {
-      ...report,
-      activities: activities.filter(activity =>
-        activity.placementId === report.placementId
-        && activity.activityDate >= range.gte
-        && activity.activityDate <= range.lte)
-    };
-  });
+  const grouped = new Map();
+  for (const activity of activities) {
+    const key = `${activity.placementId}:${dateOnly(mondayOf(activity.activityDate))}`;
+    const bucket = grouped.get(key);
+    if (bucket) bucket.push(activity);
+    else grouped.set(key, [activity]);
+  }
+
+  return reports.map(report => ({
+    ...report,
+    activities: grouped.get(`${report.placementId}:${dateOnly(mondayOf(report.weekStart))}`) || []
+  }));
 }

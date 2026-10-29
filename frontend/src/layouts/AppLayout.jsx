@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Navigate, NavLink } from 'react-router-dom';
+import { Navigate, NavLink, Outlet } from 'react-router-dom';
 import {
   Activity, BriefcaseBusiness, ChevronRight, ClipboardCheck, FileText,
   LayoutDashboard, LogOut, Menu, PenLine, UserRound
 } from '../components/icons.jsx';
 import { BrandLogo } from '../components/BrandLogo.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { prefetchApi } from '../api.js';
 
 function Shell({ children }) {
   const { user, logout } = useAuth();
@@ -25,6 +26,15 @@ function Shell({ children }) {
   ];
   const links = [...(user.role === 'MAGANG' ? intern : mentor), { to: '/profil', label: 'Profil', icon: UserRound }];
   const roleLabel = user.role === 'MAGANG' ? 'Peserta magang' : 'Mentor';
+  const warmRoute = to => {
+    const queries = {
+      '/magang/kegiatan': ['/activities'],
+      '/magang/laporan': ['/reports'],
+      '/mentor/validasi': ['/reports?status=SUBMITTED'],
+      '/mentor/laporan': ['/reports?status=SIGNED']
+    };
+    queries[to]?.forEach(path => void prefetchApi(path));
+  };
   return <div className="min-h-screen">
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200/80 bg-white/90 px-4 backdrop-blur-xl lg:hidden">
       <div className="flex items-center gap-2.5"><span className="grid h-9 w-9 place-items-center overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-200"><BrandLogo className="h-full w-full"/></span><div><b className="block text-sm text-navy-950">Uraian PKL</b><span className="block text-[10px] text-slate-400">{roleLabel}</span></div></div>
@@ -41,7 +51,7 @@ function Shell({ children }) {
       </div>
       <div className={`relative flex-1 px-4 py-6 ${sidebarOpen ? '' : 'lg:px-3'}`}>
         <p className={`mb-3 px-3 text-[10px] font-bold uppercase tracking-[.18em] text-slate-500 ${sidebarOpen ? '' : 'lg:hidden'}`}>Menu utama</p>
-        <nav className="space-y-1">{links.map(({ to, label, icon: Icon }) => <NavLink key={to} to={to} title={sidebarOpen ? undefined : label} onClick={() => setMobileOpen(false)} className={({ isActive }) => `group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${sidebarOpen ? '' : 'lg:justify-center lg:px-0'} ${isActive ? 'bg-white text-navy-950 shadow-lg shadow-black/10' : 'text-slate-300 hover:bg-white/8 hover:text-white'}`}><Icon size={18}/><span className={`flex-1 ${sidebarOpen ? '' : 'lg:hidden'}`}>{label}</span><ChevronRight size={14} className={`opacity-0 transition group-hover:opacity-60 ${sidebarOpen ? '' : 'lg:hidden'}`}/></NavLink>)}</nav>
+        <nav className="space-y-1">{links.map(({ to, label, icon: Icon }) => <NavLink key={to} to={to} title={sidebarOpen ? undefined : label} onMouseEnter={() => warmRoute(to)} onFocus={() => warmRoute(to)} onTouchStart={() => warmRoute(to)} onClick={() => setMobileOpen(false)} className={({ isActive }) => `group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${sidebarOpen ? '' : 'lg:justify-center lg:px-0'} ${isActive ? 'bg-white text-navy-950 shadow-lg shadow-black/10' : 'text-slate-300 hover:bg-white/8 hover:text-white'}`}><Icon size={18}/><span className={`flex-1 ${sidebarOpen ? '' : 'lg:hidden'}`}>{label}</span><ChevronRight size={14} className={`opacity-0 transition group-hover:opacity-60 ${sidebarOpen ? '' : 'lg:hidden'}`}/></NavLink>)}</nav>
       </div>
       <div className={`relative m-4 rounded-2xl border border-white/10 bg-white/5 p-3.5 ${sidebarOpen ? '' : 'lg:m-3 lg:p-1.5'}`}><div className={`flex items-center gap-3 ${sidebarOpen ? '' : 'lg:justify-center'}`}><div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-blue-200 font-bold text-navy-950 ${sidebarOpen ? '' : 'lg:hidden'}`}>{user.name[0].toUpperCase()}</div><div className={`min-w-0 flex-1 ${sidebarOpen ? '' : 'lg:hidden'}`}><p className="truncate text-sm font-semibold">{user.name}</p><p className="truncate text-[11px] text-slate-400">{roleLabel}</p></div><button onClick={logout} className="grid h-9 w-9 place-items-center rounded-lg text-slate-400 transition hover:bg-white/10 hover:text-white" title="Keluar" aria-label="Keluar dari akun"><LogOut size={16}/></button></div></div>
     </aside>
@@ -60,6 +70,6 @@ export function Protected({ role, children }) {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace/>;
   if (role && user.role !== role) return <Navigate to={user.role === 'MAGANG' ? '/magang/dashboard' : '/mentor/dashboard'} replace/>;
-  return <Shell>{children}</Shell>;
+  return <Shell>{children || <Outlet/>}</Shell>;
 }
 

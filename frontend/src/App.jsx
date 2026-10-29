@@ -15,14 +15,18 @@ export default function App() {
     <AuthProvider>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/magang/dashboard" element={<Protected role="MAGANG"><DashboardPage role="MAGANG" /></Protected>} />
-        <Route path="/magang/penempatan" element={<Protected role="MAGANG"><PlacementPage /></Protected>} />
-        <Route path="/magang/kegiatan" element={<Protected role="MAGANG"><ActivitiesPage /></Protected>} />
-        <Route path="/magang/laporan" element={<Protected role="MAGANG"><InternReportsPage /></Protected>} />
-        <Route path="/mentor/dashboard" element={<Protected role="MENTOR"><DashboardPage role="MENTOR" /></Protected>} />
-        <Route path="/mentor/validasi" element={<Protected role="MENTOR"><MentorReportsPage /></Protected>} />
-        <Route path="/mentor/tanda-tangan" element={<Protected role="MENTOR"><SignaturePage /></Protected>} />
-        <Route path="/mentor/laporan" element={<Protected role="MENTOR"><MentorReportsPage signedOnly /></Protected>} />
+        <Route element={<Protected role="MAGANG" />}>
+          <Route path="/magang/dashboard" element={<DashboardPage role="MAGANG" />} />
+          <Route path="/magang/penempatan" element={<PlacementPage />} />
+          <Route path="/magang/kegiatan" element={<ActivitiesPage />} />
+          <Route path="/magang/laporan" element={<InternReportsPage />} />
+        </Route>
+        <Route element={<Protected role="MENTOR" />}>
+          <Route path="/mentor/dashboard" element={<DashboardPage role="MENTOR" />} />
+          <Route path="/mentor/validasi" element={<MentorReportsPage />} />
+          <Route path="/mentor/tanda-tangan" element={<SignaturePage />} />
+          <Route path="/mentor/laporan" element={<MentorReportsPage signedOnly />} />
+        </Route>
         <Route path="/profil" element={<Protected><ProfilePage /></Protected>} />
         <Route path="*" element={<RootRedirect />} />
       </Routes>

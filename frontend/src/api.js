@@ -1,6 +1,9 @@
 const API_BASE_URL = (import.meta.env.VITE_API_URL || '/api/v1').replace(/\/$/, '');
 const DEFAULT_TIMEOUT_MS = 15_000;
-const DEFAULT_CACHE_TTL_MS = 30_000;
+// Data tetap berada di memori selama sesi SPA. TTL hanya menentukan kapan data
+// perlu diperbarui di belakang layar, bukan kapan layar harus kembali kosong.
+const DEFAULT_CACHE_TTL_MS = 2 * 60_000;
+const MAX_STALE_CACHE_MS = 15 * 60_000;
 
 const AUTH_STORAGE_KEY = 'uraian_pkl_auth';
 
@@ -100,6 +103,27 @@ export function clearApiCache() {
   pendingRequests.clear();
 }
 
+export function getCachedApiResponse(path, maxAge = MAX_STALE_CACHE_MS) {
+  const cached = responseCache.get(`GET:${path}`);
+  if (!cached || Date.now() - cached.cachedAt > maxAge) return null;
+  return cached.payload;
+}
+
+export function invalidateApiCache(paths = []) {
+  const prefixes = Array.isArray(paths) ? paths : [paths];
+  if (!prefixes.length) return clearApiCache();
+  cacheGeneration += 1;
+  for (const key of responseCache.keys()) {
+    if (prefixes.some(prefix => key === `GET:${prefix}` || key.startsWith(`GET:${prefix}?`) || key.startsWith(`GET:${prefix}/`))) {
+      responseCache.delete(key);
+    }
+  }
+}
+
+export function prefetchApi(path, options = {}) {
+  return api(path, { cacheTtl: DEFAULT_CACHE_TTL_MS, ...options }).catch(() => null);
+}
+
 function createSignal(signal, timeoutMs) {
   if (signal || !timeoutMs) return { signal, dispose: () => {} };
   const controller = new AbortController();
@@ -163,6 +187,7 @@ export async function api(path, options = {}, retry = true) {
     cacheTtl = DEFAULT_CACHE_TTL_MS,
     skipCache = false,
     signal: providedSignal,
+    invalidateCache,
     ...fetchOptions
   } = options;
   const method = (fetchOptions.method || 'GET').toUpperCase();
@@ -184,9 +209,10 @@ export async function api(path, options = {}, retry = true) {
   try {
     const payload = await request;
     if (cacheKey && generationAtStart === cacheGeneration) {
-      responseCache.set(cacheKey, { payload, expiresAt: Date.now() + cacheTtl });
+      responseCache.set(cacheKey, { payload, cachedAt: Date.now(), expiresAt: Date.now() + cacheTtl });
     } else if (method !== 'GET') {
-      clearApiCache();
+      if (invalidateCache) invalidateApiCache(invalidateCache);
+      else clearApiCache();
     }
     return payload;
   } finally {

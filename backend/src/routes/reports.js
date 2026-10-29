@@ -35,35 +35,25 @@ async function ensureInternReports(userId) {
   }
   if (!placement) return;
 
-  const activities = await prisma.activity.findMany({
-    where: { placementId: placement.id },
-    select: { activityDate: true }
-  });
+  const [activities, existingReports] = await Promise.all([
+    prisma.activity.findMany({ where: { placementId: placement.id }, select: { activityDate: true } }),
+    prisma.weeklyReport.findMany({ where: { placementId: placement.id }, select: { weekStart: true } })
+  ]);
   if (!activities.length) return;
 
-  const existingReports = await prisma.weeklyReport.findMany({
-    where: { placementId: placement.id },
-    select: { weekStart: true }
-  });
-  const existingStarts = new Set(existingReports.map(r => r.weekStart.toISOString().slice(0, 10)));
-
+  const existingStarts = new Set(existingReports.map(report => report.weekStart.toISOString().slice(0, 10)));
+  const uniqueReports = new Map();
   for (const act of activities) {
     const meta = indices(placement.startDate, act.activityDate);
     const key = meta.weekStart.toISOString().slice(0, 10);
-    if (!existingStarts.has(key)) {
-      existingStarts.add(key);
-      await prisma.weeklyReport.upsert({
-        where: { placementId_weekStart: { placementId: placement.id, weekStart: meta.weekStart } },
-        update: {},
-        create: { placementId: placement.id, ...meta }
-      });
-    }
+    if (!existingStarts.has(key) && !uniqueReports.has(key)) uniqueReports.set(key, { placementId: placement.id, ...meta });
   }
+  if (uniqueReports.size) await prisma.weeklyReport.createMany({ data: [...uniqueReports.values()], skipDuplicates: true });
 }
 
 reportsRouter.get('/', async (req, res) => {
   if (req.user.role === 'MAGANG') {
-    await ensureInternReports(req.user.id).catch(() => {});
+    await ensureInternReports(req.user.id).catch(() => { });
   }
   const allowed = ['DRAFT', 'SUBMITTED', 'RETURNED', 'SIGNED'];
   const status = req.query.status && allowed.includes(req.query.status) ? req.query.status : undefined;
@@ -101,20 +91,18 @@ reportsRouter.post('/submit-batch', requireRole('MAGANG'), async (req, res) => {
     if (reports.length !== ids.length || reports.some(report => !['DRAFT', 'RETURNED'].includes(report.status))) {
       throw appError(409, 'Semua laporan harus milik Anda dan dapat diajukan. Tidak ada laporan yang diubah.');
     }
-    let activities = 0;
-    for (const report of reports) {
-      const count = await tx.activity.count({ where: { placementId: report.placementId, activityDate: reportRange(report.weekStart) } });
-      if (!count) throw appError(422, 'Salah satu laporan kosong. Tidak ada laporan yang diajukan.');
-      const changed = await tx.weeklyReport.updateMany({
-        where: { id: report.id, status: report.status },
-        data: { status: 'SUBMITTED', submittedAt: new Date(), returnReason: null, revision: report.status === 'RETURNED' ? { increment: 1 } : undefined }
-      });
-      if (changed.count !== 1) throw appError(409, 'Status laporan berubah bersamaan. Tidak ada laporan yang diubah.');
-      await tx.approvalAudit.create({
-        data: { reportId: report.id, actorId: req.user.id, action: 'SUBMITTED', beforeStatus: report.status, afterStatus: 'SUBMITTED', details: { activityCount: count } }
-      });
-      activities += count;
-    }
+    const reportsWithActivities = await attachActivities(reports, tx);
+    if (reportsWithActivities.some(report => !report.activities.length)) throw appError(422, 'Salah satu laporan kosong. Tidak ada laporan yang diajukan.');
+    const submittedAt = new Date();
+    const drafts = reportsWithActivities.filter(report => report.status === 'DRAFT');
+    const returned = reportsWithActivities.filter(report => report.status === 'RETURNED');
+    const [draftResult, returnedResult] = await Promise.all([
+      drafts.length ? tx.weeklyReport.updateMany({ where: { id: { in: drafts.map(report => report.id) }, status: 'DRAFT' }, data: { status: 'SUBMITTED', submittedAt, returnReason: null } }) : { count: 0 },
+      returned.length ? tx.weeklyReport.updateMany({ where: { id: { in: returned.map(report => report.id) }, status: 'RETURNED' }, data: { status: 'SUBMITTED', submittedAt, returnReason: null, revision: { increment: 1 } } }) : { count: 0 }
+    ]);
+    if (draftResult.count + returnedResult.count !== reports.length) throw appError(409, 'Status laporan berubah bersamaan. Tidak ada laporan yang diubah.');
+    await tx.approvalAudit.createMany({ data: reportsWithActivities.map(report => ({ reportId: report.id, actorId: req.user.id, action: 'SUBMITTED', beforeStatus: report.status, afterStatus: 'SUBMITTED', details: { activityCount: report.activities.length } })) });
+    const activities = reportsWithActivities.reduce((total, report) => total + report.activities.length, 0);
     return { submittedReportCount: reports.length, submittedActivityCount: activities };
   }, { isolationLevel: 'Serializable' });
   res.json({ success: true, data: result, message: `${result.submittedReportCount} laporan berhasil diajukan kepada mentor.` });
@@ -160,15 +148,12 @@ reportsRouter.post('/sign-batch', requireRole('MENTOR'), async (req, res) => {
   const result = await prisma.$transaction(async tx => {
     const reports = await tx.weeklyReport.findMany({ where: { id: { in: ids }, placement: { mentorId: req.user.id } }, orderBy: { weekStart: 'asc' } });
     if (reports.length !== ids.length || reports.some(r => r.status !== 'SUBMITTED')) throw appError(409, 'Semua laporan harus milik Anda dan berstatus SUBMITTED. Tidak ada laporan yang diubah.');
-    let activities = 0;
-    for (const report of reports) {
-      const count = await tx.activity.count({ where: { placementId: report.placementId, activityDate: reportRange(report.weekStart) } });
-      if (!count) throw appError(409, 'Salah satu laporan tidak memiliki kegiatan. Tidak ada laporan yang diubah.');
-      const changed = await tx.weeklyReport.updateMany({ where: { id: report.id, status: 'SUBMITTED' }, data: { status: 'SIGNED', signedAt: new Date(), signedById: req.user.id, signatureVersionId: signature.id, returnReason: null } });
-      if (changed.count !== 1) throw appError(409, 'Status laporan berubah bersamaan. Tidak ada laporan yang diubah.');
-      await tx.approvalAudit.create({ data: { reportId: report.id, actorId: req.user.id, action: 'SIGNED', beforeStatus: 'SUBMITTED', afterStatus: 'SIGNED', details: { activityCount: count, signatureVersionId: signature.id } } });
-      activities += count;
-    }
+    const reportsWithActivities = await attachActivities(reports, tx);
+    if (reportsWithActivities.some(report => !report.activities.length)) throw appError(409, 'Salah satu laporan tidak memiliki kegiatan. Tidak ada laporan yang diubah.');
+    const changed = await tx.weeklyReport.updateMany({ where: { id: { in: ids }, status: 'SUBMITTED' }, data: { status: 'SIGNED', signedAt: new Date(), signedById: req.user.id, signatureVersionId: signature.id, returnReason: null } });
+    if (changed.count !== reports.length) throw appError(409, 'Status laporan berubah bersamaan. Tidak ada laporan yang diubah.');
+    await tx.approvalAudit.createMany({ data: reportsWithActivities.map(report => ({ reportId: report.id, actorId: req.user.id, action: 'SIGNED', beforeStatus: 'SUBMITTED', afterStatus: 'SIGNED', details: { activityCount: report.activities.length, signatureVersionId: signature.id } })) });
+    const activities = reportsWithActivities.reduce((total, report) => total + report.activities.length, 0);
     return { signedReportCount: reports.length, signedActivityCount: activities };
   }, { isolationLevel: 'Serializable' });
   res.json({ success: true, data: result, message: `${result.signedReportCount} laporan (${result.signedActivityCount} kegiatan) berhasil divalidasi mentor.` });
