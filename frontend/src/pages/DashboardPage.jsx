@@ -11,6 +11,7 @@ import {
   UserRound,
 } from "../components/icons.jsx";
 import { api } from "../api.js";
+import { useAuth } from "../auth/AuthContext.jsx";
 import { Page } from "../layouts/AppLayout.jsx";
 import { ReportTable } from "../components/reports/ReportComponents.jsx";
 
@@ -41,6 +42,7 @@ function StatCard({ label, value, icon: Icon, tone }) {
 }
 
 export default function DashboardPage({ role }) {
+  const { user } = useAuth();
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [placement, setPlacement] = useState(null);
@@ -61,7 +63,7 @@ export default function DashboardPage({ role }) {
   const destination = isIntern ? "/magang/kegiatan" : "/mentor/validasi";
   return (
     <Page
-      title={`Dashboard ${isIntern ? "magang" : "mentor"}`}
+      title={`Selamat datang, ${user.name}`}
       description={
         isIntern
           ? "Pantau progres PKL dan kelola laporan harian Anda dari satu tempat."

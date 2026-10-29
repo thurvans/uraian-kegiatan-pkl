@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { resolveDatabaseUrl } from '../src/config.js';
+import { resolveBlobAuthStatus, resolveDatabaseUrl } from '../src/config.js';
 
 test('resolveDatabaseUrl: mendeteksi alias resmi Prisma Postgres Vercel (PRISMA_DATABASE_URL)', () => {
   const env = {
@@ -45,5 +45,30 @@ test('resolveDatabaseUrl: mendeteksi otomatis prefix saat hanya uraian_PRISMA_DA
     uraian_PRISMA_DATABASE_URL: 'postgres://prisma_user:pass@db.prisma.io:5432/postgres'
   };
   assert.equal(resolveDatabaseUrl(env), 'postgres://prisma_user:pass@db.prisma.io:5432/postgres');
+});
+
+test('resolveBlobAuthStatus: menerima read-write token Blob', () => {
+  assert.deepEqual(
+    resolveBlobAuthStatus({ BLOB_READ_WRITE_TOKEN: 'vercel_blob_rw_storeId_secret' }),
+    { configured: true, mode: 'read-write' }
+  );
+});
+
+test('resolveBlobAuthStatus: menerima OIDC hanya bersama store ID', () => {
+  assert.deepEqual(
+    resolveBlobAuthStatus({ VERCEL_OIDC_TOKEN: 'oidc-token', BLOB_STORE_ID: 'store-id' }),
+    { configured: true, mode: 'oidc' }
+  );
+  assert.deepEqual(
+    resolveBlobAuthStatus({ VERCEL_OIDC_TOKEN: 'oidc-token' }),
+    { configured: false, reason: 'missing-store-id' }
+  );
+});
+
+test('resolveBlobAuthStatus: menolak token akun/API yang ditempatkan sebagai token Blob', () => {
+  assert.deepEqual(
+    resolveBlobAuthStatus({ BLOB_READ_WRITE_TOKEN: 'opaque-account-token' }),
+    { configured: false, reason: 'invalid-read-write-token' }
+  );
 });
 

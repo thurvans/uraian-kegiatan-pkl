@@ -78,6 +78,17 @@ export function resolveBlobCredentials(env = process.env) {
   return { storeId: storeId || undefined, token: token || undefined };
 }
 
+export function resolveBlobAuthStatus(env = process.env) {
+  const { storeId, token } = resolveBlobCredentials(env);
+  const oidcToken = typeof env.VERCEL_OIDC_TOKEN === 'string' ? env.VERCEL_OIDC_TOKEN.trim() : '';
+
+  if (oidcToken && storeId) return { configured: true, mode: 'oidc' };
+  if (token?.startsWith('vercel_blob_rw_')) return { configured: true, mode: 'read-write' };
+  if (token) return { configured: false, reason: 'invalid-read-write-token' };
+  if (oidcToken && !storeId) return { configured: false, reason: 'missing-store-id' };
+  return { configured: false, reason: 'missing-credentials' };
+}
+
 const autoDatabaseUrl = resolveDatabaseUrl(process.env);
 if (autoDatabaseUrl) {
   process.env.DATABASE_URL = autoDatabaseUrl;
@@ -143,6 +154,17 @@ const parsed = schema.safeParse(process.env);
 if (!parsed.success) {
   const fields = parsed.error.issues.map(issue => issue.path.join('.') || 'environment').join(', ');
   throw new Error(`Konfigurasi environment tidak valid: ${fields}`);
+}
+
+
+const blobAuthStatus = resolveBlobAuthStatus(process.env);
+if (parsed.success && parsed.data.NODE_ENV !== 'test' && !blobAuthStatus.configured) {
+  const messages = {
+    'invalid-read-write-token': 'BLOB_READ_WRITE_TOKEN bukan read-write token Vercel Blob (format yang diharapkan: vercel_blob_rw_...).',
+    'missing-store-id': 'VERCEL_OIDC_TOKEN tersedia, tetapi BLOB_STORE_ID belum diisi.',
+    'missing-credentials': 'Vercel Blob belum memiliki pasangan kredensial yang dapat digunakan.'
+  };
+  console.warn(`[config] ${messages[blobAuthStatus.reason]}`);
 }
 
 export const config = Object.freeze(parsed.data);

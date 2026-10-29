@@ -20,6 +20,7 @@ import {
   faLock,
   faPaperPlane,
   faPenNib,
+  faPencil,
   faPlus,
   faRightFromBracket,
   faShieldHalved,
@@ -58,6 +59,7 @@ export const LogOut = createIcon(faRightFromBracket);
 export const Lock = createIcon(faLock);
 export const Menu = createIcon(faBars);
 export const PenLine = createIcon(faPenNib);
+export const Pencil = createIcon(faPencil);
 export const Plus = createIcon(faPlus);
 export const Save = createIcon(faFloppyDisk);
 export const Send = createIcon(faPaperPlane);

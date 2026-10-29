@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { PenLine, Plus, Save, Trash2 } from "../components/icons.jsx";
+import { Pencil, Plus, Save, Trash2 } from "../components/icons.jsx";
 import { api, getCachedApiResponse } from "../api.js";
 import { DateInput, TimeInput } from "../components/DateTimeInput.jsx";
 import { Notice } from "../components/Feedback.jsx";
@@ -290,7 +290,7 @@ export default function ActivitiesPage() {
                             title="Ubah kegiatan"
                             aria-label="Ubah kegiatan"
                           >
-                            <PenLine size={16} />
+                            <Pencil size={16} />
                           </button>
                           <button
                             type="button"
