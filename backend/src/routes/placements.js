@@ -1,32 +1,14 @@
 import { Router } from 'express';
-import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import { appError } from '../middleware/error.js';
 import { parseDateOnly } from '../lib/dates.js';
+import { serializableTransaction } from '../lib/transactions.js';
+import { assertPlacementDocumentMutable, requireDefaultMentor } from '../services/placements.js';
 
 export const placementsRouter = Router();
 placementsRouter.use(authenticate);
-
-async function findOrCreateDefaultMentor() {
-  let mentor = await prisma.user.findFirst({
-    where: { role: 'MENTOR', isActive: true },
-    orderBy: { createdAt: 'asc' }
-  });
-  if (!mentor) {
-    const passwordHash = await bcrypt.hash('Password123!', 12);
-    mentor = await prisma.user.create({
-      data: {
-        name: 'Mentor Pembimbing',
-        email: 'mentor@pkl.local',
-        passwordHash,
-        role: 'MENTOR'
-      }
-    });
-  }
-  return mentor;
-}
 
 function getDefaultPlacementDates() {
   const today = new Date();
@@ -54,7 +36,7 @@ placementsRouter.get('/me', requireRole('MAGANG'), async (req, res) => {
   });
 
   if (!data) {
-    const mentor = await findOrCreateDefaultMentor();
+    const mentor = await requireDefaultMentor(prisma);
     const { startDate, endDate } = getDefaultPlacementDates();
     data = await prisma.internshipPlacement.create({
       data: {
@@ -88,32 +70,23 @@ placementsRouter.put('/me', requireRole('MAGANG'), async (req, res) => {
   const endDate = parseDateOnly(input.endDate);
   if (endDate < startDate) throw appError(422, 'Tanggal selesai tidak boleh sebelum tanggal mulai.');
 
-  let current = await prisma.internshipPlacement.findFirst({ where: { internId: req.user.id } });
+  const next = { ...input, startDate, endDate };
+  const data = await serializableTransaction(prisma, async tx => {
+    const current = await tx.internshipPlacement.findFirst({ where: { internId: req.user.id } });
+    if (!current) {
+      const mentor = await requireDefaultMentor(tx);
+      return tx.internshipPlacement.create({
+        data: { internId: req.user.id, mentorId: mentor.id, ...next },
+        include: { mentor: { select: { id: true, name: true, email: true } } }
+      });
+    }
 
-  if (!current) {
-    const mentor = await findOrCreateDefaultMentor();
-    const data = await prisma.internshipPlacement.create({
-      data: {
-        internId: req.user.id,
-        mentorId: mentor.id,
-        ...input,
-        startDate,
-        endDate
-      },
+    await assertPlacementDocumentMutable(tx, current, next);
+    return tx.internshipPlacement.update({
+      where: { id: current.id },
+      data: next,
       include: { mentor: { select: { id: true, name: true, email: true } } }
     });
-    return res.json({ success: true, data, message: 'Identitas PKL berhasil disimpan.' });
-  }
-
-  const changedPeriod = +startDate !== +current.startDate || +endDate !== +current.endDate;
-  if (changedPeriod && await prisma.weeklyReport.count({ where: { placementId: current.id, status: 'SIGNED' } })) {
-    throw appError(409, 'Periode tidak dapat diubah karena sudah ada laporan yang ditandatangani.');
-  }
-
-  const data = await prisma.internshipPlacement.update({
-    where: { id: current.id },
-    data: { ...input, startDate, endDate },
-    include: { mentor: { select: { id: true, name: true, email: true } } }
   });
   res.json({ success: true, data, message: 'Identitas PKL berhasil disimpan.' });
 });

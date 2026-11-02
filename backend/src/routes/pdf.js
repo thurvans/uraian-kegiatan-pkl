@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma.js';
 import { authenticate } from '../middleware/auth.js';
 import { appError } from '../middleware/error.js';
 import { buildPdf } from '../services/pdf.js';
+import { assertCompletePdfReports, enforcePdfExportLimit } from '../services/pdf-export.js';
 import { attachActivities } from '../services/report-activities.js';
 import { config } from '../config.js';
 
@@ -22,8 +23,13 @@ pdfRouter.get('/reports/:id/pdf', async (req, res) => {
 pdfRouter.get('/placements/:id/pdf', async (req, res) => {
   const placement = await prisma.internshipPlacement.findFirst({ where: { id: req.params.id, ...(req.user.role === 'MAGANG' ? { internId: req.user.id } : { mentorId: req.user.id }) } });
   if (!placement) throw appError(404, 'Penempatan tidak ditemukan.');
-  const found = await prisma.weeklyReport.findMany({ where: { placementId: placement.id, status: 'SIGNED' }, include, orderBy: { weekStart: 'asc' }, take: config.PDF_EXPORT_MAX_REPORTS });
-  const reports = (await attachActivities(found)).filter(report => report.activities.length);
-  if (!reports.length) throw appError(422, 'Belum ada laporan bertanda tangan untuk diekspor.');
+  const found = await prisma.weeklyReport.findMany({
+    where: { placementId: placement.id, status: 'SIGNED' },
+    include,
+    orderBy: { weekStart: 'asc' },
+    take: config.PDF_EXPORT_MAX_REPORTS + 1
+  });
+  enforcePdfExportLimit(found, config.PDF_EXPORT_MAX_REPORTS);
+  const reports = assertCompletePdfReports(await attachActivities(found));
   await buildPdf(res, reports, `Uraian_PKL_Periode_${placement.startDate.toISOString().slice(0, 10)}_${placement.endDate.toISOString().slice(0, 10)}.pdf`);
 });

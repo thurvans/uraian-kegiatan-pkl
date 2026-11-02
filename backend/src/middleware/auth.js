@@ -1,13 +1,14 @@
 import { prisma } from '../lib/prisma.js';
 import { verifyAccessToken } from '../lib/auth.js';
+import { resolveAccessUser } from '../services/access-session.js';
 
 export async function authenticate(req, res, next) {
   try {
     const token = req.headers.authorization?.match(/^Bearer (.+)$/)?.[1];
     if (!token) return res.status(401).json({ success: false, message: 'Autentikasi diperlukan.' });
     const payload = await verifyAccessToken(token);
-    const user = await prisma.user.findFirst({ where: { id: payload.sub, isActive: true }, select: { id: true, name: true, email: true, role: true } });
-    if (!user || user.role !== payload.role) return res.status(401).json({ success: false, message: 'Sesi tidak valid.' });
+    const user = await resolveAccessUser(prisma, payload);
+    if (!user) return res.status(401).json({ success: false, message: 'Sesi tidak valid.' });
     req.user = user;
     next();
   } catch { return res.status(401).json({ success: false, message: 'Token tidak valid atau kedaluwarsa.' }); }

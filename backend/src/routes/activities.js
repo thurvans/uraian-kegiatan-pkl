@@ -3,7 +3,9 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import { appError } from '../middleware/error.js';
-import { dateOnly, indices, isWeekday, parseDateOnly, reportRange } from '../lib/dates.js';
+import { dateOnly, indices, parseDateOnly, reportRange } from '../lib/dates.js';
+import { serializableTransaction } from '../lib/transactions.js';
+import { validateActivityWrite } from '../services/activity-write.js';
 
 export const activitiesRouter = Router();
 activitiesRouter.use(authenticate, requireRole('MAGANG'));
@@ -18,15 +20,15 @@ const activitySchema = z.object({
   path: ['endTime']
 });
 
-async function placementOf(userId) {
-  let placement = await prisma.internshipPlacement.findFirst({ where: { internId: userId } });
+async function placementOf(client, userId) {
+  let placement = await client.internshipPlacement.findFirst({ where: { internId: userId } });
   if (!placement) {
-    const mentor = await prisma.user.findFirst({ where: { role: 'MENTOR', isActive: true }, orderBy: { createdAt: 'asc' } });
+    const mentor = await client.user.findFirst({ where: { role: 'MENTOR', isActive: true }, orderBy: { createdAt: 'asc' } });
     if (mentor) {
       const today = new Date();
       const startDate = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
       const endDate = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 3, 0));
-      placement = await prisma.internshipPlacement.create({
+      placement = await client.internshipPlacement.create({
         data: {
           internId: userId,
           mentorId: mentor.id,
@@ -43,19 +45,6 @@ async function placementOf(userId) {
   if (!placement) throw appError(404, 'Penempatan PKL belum tersedia.');
   return placement;
 }
-async function validate(placement, input, ignoreId) {
-  const activityDate = parseDateOnly(input.activityDate);
-  if (!isWeekday(activityDate)) throw appError(422, 'Kegiatan hanya dapat dicatat pada Senin–Jumat.');
-  if (activityDate < placement.startDate || activityDate > placement.endDate) throw appError(422, 'Tanggal kegiatan berada di luar periode PKL.');
-  if (input.startTime !== 'WFH' && input.endTime <= input.startTime) throw appError(422, 'Waktu selesai harus setelah waktu mulai.');
-  const { weekStart } = indices(placement.startDate, activityDate);
-  const report = await prisma.weeklyReport.findUnique({ where: { placementId_weekStart: { placementId: placement.id, weekStart } } });
-  if (report && !['DRAFT', 'RETURNED'].includes(report.status)) throw appError(409, 'Laporan minggu ini sedang dikunci atau sudah ditandatangani.');
-  const duplicate = await prisma.activity.findFirst({ where: { placementId: placement.id, activityDate, ...(ignoreId ? { id: { not: ignoreId } } : {}) } });
-  if (duplicate) throw appError(409, 'Kegiatan untuk tanggal tersebut sudah ada.');
-  return activityDate;
-}
-
 async function removeEmptyReports(client, placement, weekStarts) {
   let deletedCount = 0;
   for (const weekStart of weekStarts) {
@@ -72,17 +61,18 @@ async function removeEmptyReports(client, placement, weekStarts) {
 }
 
 activitiesRouter.get('/', async (req, res) => {
-  const placement = await placementOf(req.user.id);
+  const placement = await placementOf(prisma, req.user.id);
   const weekStart = req.query.weekStart ? parseDateOnly(req.query.weekStart) : null;
   const data = await prisma.activity.findMany({ where: { placementId: placement.id, ...(weekStart ? { activityDate: reportRange(weekStart) } : {}) }, orderBy: { activityDate: 'desc' } });
   res.json({ success: true, data });
 });
 
 activitiesRouter.post('/', async (req, res) => {
-  const input = activitySchema.parse(req.body), placement = await placementOf(req.user.id);
-  const activityDate = await validate(placement, input);
-  const meta = indices(placement.startDate, activityDate);
-  const data = await prisma.$transaction(async tx => {
+  const input = activitySchema.parse(req.body);
+  const data = await serializableTransaction(prisma, async tx => {
+    const placement = await placementOf(tx, req.user.id);
+    const activityDate = await validateActivityWrite(tx, placement, input);
+    const meta = indices(placement.startDate, activityDate);
     await tx.weeklyReport.upsert({ where: { placementId_weekStart: { placementId: placement.id, weekStart: meta.weekStart } }, update: {}, create: { placementId: placement.id, ...meta } });
     return tx.activity.create({ data: { ...input, activityDate, placementId: placement.id } });
   });
@@ -90,12 +80,15 @@ activitiesRouter.post('/', async (req, res) => {
 });
 
 activitiesRouter.patch('/:id', async (req, res) => {
-  const input = activitySchema.parse(req.body), placement = await placementOf(req.user.id);
-  const current = await prisma.activity.findFirst({ where: { id: req.params.id, placementId: placement.id } });
-  if (!current) throw appError(404, 'Kegiatan tidak ditemukan.');
-  const activityDate = await validate(placement, input, current.id);
-  if (dateOnly(activityDate) !== dateOnly(current.activityDate)) throw appError(422, 'Tanggal kegiatan tidak dapat dipindahkan; hapus lalu buat pada tanggal baru.');
-  const data = await prisma.activity.update({ where: { id: current.id }, data: { ...input, activityDate } });
+  const input = activitySchema.parse(req.body);
+  const data = await serializableTransaction(prisma, async tx => {
+    const placement = await placementOf(tx, req.user.id);
+    const current = await tx.activity.findFirst({ where: { id: req.params.id, placementId: placement.id } });
+    if (!current) throw appError(404, 'Kegiatan tidak ditemukan.');
+    const activityDate = await validateActivityWrite(tx, placement, input, current.id);
+    if (dateOnly(activityDate) !== dateOnly(current.activityDate)) throw appError(422, 'Tanggal kegiatan tidak dapat dipindahkan; hapus lalu buat pada tanggal baru.');
+    return tx.activity.update({ where: { id: current.id }, data: { ...input, activityDate } });
+  });
   res.json({ success: true, data, message: 'Kegiatan berhasil diperbarui.' });
 });
 
@@ -103,8 +96,8 @@ activitiesRouter.delete('/batch', async (req, res) => {
   const input = z.object({ activityIds: z.array(z.string().uuid()).min(1).max(500) }).parse(req.body);
   const ids = [...new Set(input.activityIds)];
   if (ids.length !== input.activityIds.length) throw appError(422, 'Daftar kegiatan mengandung ID duplikat.');
-  const placement = await placementOf(req.user.id);
-  const result = await prisma.$transaction(async tx => {
+  const result = await serializableTransaction(prisma, async tx => {
+    const placement = await placementOf(tx, req.user.id);
     const activities = await tx.activity.findMany({ where: { id: { in: ids }, placementId: placement.id } });
     if (activities.length !== ids.length) throw appError(404, 'Salah satu kegiatan tidak ditemukan. Tidak ada kegiatan yang dihapus.');
     const weekStartValues = [...new Set(activities.map(activity => dateOnly(indices(placement.startDate, activity.activityDate).weekStart)))];
@@ -116,13 +109,13 @@ activitiesRouter.delete('/batch', async (req, res) => {
     const deletedActivities = await tx.activity.deleteMany({ where: { id: { in: ids }, placementId: placement.id } });
     const deletedReports = await removeEmptyReports(tx, placement, weekStarts);
     return { deletedActivities: deletedActivities.count, deletedReports };
-  }, { isolationLevel: 'Serializable' });
+  });
   res.json({ success: true, data: result, message: `${result.deletedActivities} kegiatan berhasil dihapus dari riwayat dan laporan.` });
 });
 
 activitiesRouter.delete('/:id', async (req, res) => {
-  const placement = await placementOf(req.user.id);
-  const result = await prisma.$transaction(async tx => {
+  const result = await serializableTransaction(prisma, async tx => {
+    const placement = await placementOf(tx, req.user.id);
     const current = await tx.activity.findFirst({ where: { id: req.params.id, placementId: placement.id } });
     if (!current) throw appError(404, 'Kegiatan tidak ditemukan.');
     const weekStart = indices(placement.startDate, current.activityDate).weekStart;
@@ -131,6 +124,6 @@ activitiesRouter.delete('/:id', async (req, res) => {
     await tx.activity.delete({ where: { id: current.id } });
     const deletedReports = await removeEmptyReports(tx, placement, [weekStart]);
     return { deletedActivities: 1, deletedReports };
-  }, { isolationLevel: 'Serializable' });
+  });
   res.json({ success: true, data: result, message: 'Kegiatan berhasil dihapus dari riwayat dan laporan.' });
 });

@@ -6,8 +6,9 @@ const key = new TextEncoder().encode(config.JWT_SIGNING_SECRET);
 export const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
 export const randomToken = () => crypto.randomBytes(48).toString('base64url');
 
-export async function createAccessToken(user) {
-  return new SignJWT({ role: user.role }).setProtectedHeader({ alg: 'HS256' }).setSubject(user.id)
+export async function createAccessToken(user, sessionId) {
+  if (!sessionId) throw new TypeError('Session ID diperlukan untuk membuat access token.');
+  return new SignJWT({ role: user.role, sid: sessionId }).setProtectedHeader({ alg: 'HS256' }).setSubject(user.id)
     .setIssuer(config.JWT_ISSUER).setAudience(config.JWT_AUDIENCE).setJti(crypto.randomUUID())
     .setIssuedAt().setExpirationTime(`${config.JWT_ACCESS_TTL_MINUTES}m`).sign(key);
 }

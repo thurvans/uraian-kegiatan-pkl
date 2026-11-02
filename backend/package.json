@@ -36,6 +36,9 @@
     "prisma": "^6.18.0"
   },
   "overrides": {
-    "deepmerge-ts": "^8.0.0"
+    "deepmerge-ts": "^8.0.0",
+    "@vercel/cli-config": {
+      "zod": "4.6.7"
+    }
   }
 }
