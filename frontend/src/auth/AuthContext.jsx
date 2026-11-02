@@ -3,10 +3,8 @@ import {
   api,
   clearSession,
   getStoredSession,
-  isTokenValid,
   refreshAccessToken,
-  saveSession,
-  setToken
+  saveSession
 } from '../api.js';
 
 const AuthContext = createContext(null);
@@ -17,49 +15,16 @@ function AppLoading() {
 
 export function AuthProvider({ children }) {
   const initialSession = getStoredSession();
-  const hasValidToken = Boolean(initialSession?.accessToken && isTokenValid(initialSession.accessToken));
-  const hasSavedUser = Boolean(initialSession?.user && (hasValidToken || initialSession?.refreshToken));
+  const hasSavedUser = Boolean(initialSession?.user);
 
   const [user, setUser] = useState(() => (hasSavedUser ? initialSession.user : null));
-  const [ready, setReady] = useState(() => hasValidToken);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     let active = true;
 
     async function restoreSession() {
-      const stored = getStoredSession();
-
-      if (!stored?.accessToken && !stored?.refreshToken) {
-        if (active) {
-          setUser(null);
-          setReady(true);
-        }
-        return;
-      }
-
-      // Kasus 1: Access token masih valid (masa berlaku 30 menit)
-      if (stored?.accessToken && isTokenValid(stored.accessToken)) {
-        setToken(stored.accessToken);
-        if (active) {
-          if (stored.user) setUser(stored.user);
-          setReady(true);
-        }
-        try {
-          const me = await api('/auth/me');
-          if (active && me?.data) {
-            setUser(me.data);
-            saveSession({ user: me.data });
-          }
-        } catch (err) {
-          if ((err?.status === 401 || err?.status === 403) && active) {
-            clearSession();
-            setUser(null);
-          }
-        }
-        return;
-      }
-
-      // Kasus 2: Access token kedaluwarsa atau belum ada, pulihkan via refresh token
+      // Access tokens live only in memory. Reloads restore the session via HttpOnly cookie.
       try {
         const result = await refreshAccessToken();
         if (active && result?.user) {
@@ -85,17 +50,13 @@ export function AuthProvider({ children }) {
     user,
     login: async credentials => {
       const result = await api('/auth/login', { method: 'POST', body: JSON.stringify(credentials) }, false);
-      const { accessToken, user: userData, refreshToken } = result.data;
-      saveSession({ accessToken, user: userData, refreshToken });
+      const { accessToken, user: userData } = result.data;
+      saveSession({ accessToken, user: userData });
       setUser(userData);
       return userData;
     },
     logout: async () => {
-      const stored = getStoredSession();
-      await api('/auth/logout', {
-        method: 'POST',
-        body: stored?.refreshToken ? JSON.stringify({ refreshToken: stored.refreshToken }) : undefined
-      }).catch(() => {});
+      await api('/auth/logout', { method: 'POST' }).catch(() => {});
       clearSession();
       setUser(null);
     },

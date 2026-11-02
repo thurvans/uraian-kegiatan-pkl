@@ -127,11 +127,11 @@ export default function PlacementPage() {
             <div className="rounded-2xl border border-blue-100 bg-blue-50 p-5">
               <ShieldCheck className="text-blue-700" size={21} />
               <p className="mt-3 text-sm font-bold text-blue-950">
-                Data terkunci setelah validasi
+                Data terkunci selama peninjauan
               </p>
               <p className="mt-1 text-xs leading-5 text-blue-800/75">
-                Periode tidak dapat diubah jika sudah ada laporan yang
-                ditandatangani mentor.
+                Identitas dan periode tidak dapat diubah saat laporan sedang
+                ditinjau atau sudah ditandatangani mentor.
               </p>
             </div>
           </aside>

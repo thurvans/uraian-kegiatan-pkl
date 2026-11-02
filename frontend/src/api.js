@@ -7,48 +7,26 @@ const MAX_STALE_CACHE_MS = 15 * 60_000;
 
 const AUTH_STORAGE_KEY = 'uraian_pkl_auth';
 
-export function parseJwt(token) {
-  try {
-    const base64Url = token.split('.')[1];
-    if (!base64Url) return null;
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = base64.padEnd(base64.length + (4 - (base64.length % 4)) % 4, '=');
-    const jsonPayload = decodeURIComponent(
-      window
-        .atob(padded)
-        .split('')
-        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-        .join('')
-    );
-    return JSON.parse(jsonPayload);
-  } catch {
-    return null;
-  }
-}
-
-export function isTokenValid(token, bufferSeconds = 15) {
-  if (!token || typeof token !== 'string') return false;
-  const payload = parseJwt(token);
-  if (!payload || !payload.exp) return false;
-  return payload.exp * 1000 > Date.now() + bufferSeconds * 1000;
-}
-
 export function getStoredSession() {
   try {
     const raw = localStorage.getItem(AUTH_STORAGE_KEY);
     if (!raw) return null;
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    const session = { user: parsed?.user || null };
+    // Remove credentials written by older releases as soon as they are observed.
+    if (parsed?.accessToken || parsed?.refreshToken) {
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+    }
+    return session;
   } catch {
     return null;
   }
 }
 
-export function saveSession({ accessToken: newAccessToken, user, refreshToken }) {
+export function saveSession({ accessToken: newAccessToken, user }) {
   try {
     const current = getStoredSession() || {};
     const session = {
-      accessToken: newAccessToken || current.accessToken || null,
-      refreshToken: refreshToken !== undefined ? (refreshToken || current.refreshToken || null) : (current.refreshToken || null),
       user: user || current.user || null
     };
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
@@ -68,10 +46,7 @@ export function clearSession() {
   setToken(null);
 }
 
-const initialSession = getStoredSession();
-let accessToken = (initialSession?.accessToken && isTokenValid(initialSession.accessToken))
-  ? initialSession.accessToken
-  : null;
+let accessToken = null;
 let refreshRequest = null;
 let cacheGeneration = 0;
 const responseCache = new Map();
@@ -139,19 +114,9 @@ async function parsePayload(response) {
 
 export async function refreshAccessToken() {
   if (!refreshRequest) {
-    const stored = getStoredSession();
-    const headers = {};
-    let body;
-    if (stored?.refreshToken) {
-      headers['Content-Type'] = 'application/json';
-      body = JSON.stringify({ refreshToken: stored.refreshToken });
-    }
-
     refreshRequest = fetch(`${API_BASE_URL}/auth/refresh`, {
       method: 'POST',
-      credentials: 'include',
-      headers,
-      body
+      credentials: 'include'
     })
       .then(async response => {
         const payload = await parsePayload(response);
@@ -163,7 +128,6 @@ export async function refreshAccessToken() {
         }
         saveSession({
           accessToken: payload.data.accessToken,
-          refreshToken: payload.data.refreshToken || stored?.refreshToken,
           user: payload.data.user
         });
         return payload.data;
