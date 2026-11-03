@@ -84,11 +84,11 @@ button:disabled { cursor: not-allowed; }
 .card-hover:hover { border-color: var(--line-strong); box-shadow: 0 8px 24px rgba(21, 40, 46, .06); transform: translateY(-1px); }
 .eyebrow { @apply text-xs font-semibold; color: var(--accent); }
 .section-title { @apply text-lg font-semibold tracking-[-.015em]; color: var(--ink); }
-.page-enter { animation: page-enter 440ms cubic-bezier(.16, 1, .3, 1) both; }
+.page-enter { animation: page-enter 320ms cubic-bezier(.16, 1, .3, 1); }
 h1, h2, h3 { scroll-margin-top: 5rem; }
 [role="dialog"] { overscroll-behavior: contain; }
 @media (pointer: fine) { html { overscroll-behavior: none; } }
-@keyframes page-enter { from { opacity: .01; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes page-enter { from { opacity: .01; } to { opacity: 1; } }
 
 table { border-collapse: collapse; }
 thead { background: #f5f7f5 !important; color: #596b70 !important; }
