@@ -16,12 +16,12 @@ function PreviewReport({ report }) {
         </div>
       )}
       <div className="relative">
-        <div className="mb-3 flex items-center justify-between gap-4 font-serif text-xs font-bold text-black">
+        <div className="mb-3 flex items-center justify-between gap-4 text-xs font-bold text-black">
           <h3 id={`preview-week-${report.id}`}>MINGGU KE : {report.weekIndex}</h3>
           <p>BULAN KE : {report.monthIndex}</p>
         </div>
         <div className="overflow-x-auto border border-black">
-          <table className="w-full min-w-[680px] table-fixed font-serif text-[11px] text-black">
+          <table className="w-full min-w-[680px] table-fixed text-[11px] text-black">
             <caption className="sr-only">Preview laporan minggu {report.weekIndex}</caption>
             <colgroup>
               <col className="w-[8%]" />
@@ -103,9 +103,9 @@ export function PeriodPreviewModal({ open, reports, onClose }) {
             <AlertTriangle size={16} /> Pencetakan dinonaktifkan untuk preview laporan yang belum final.
           </div>
         )}
-        <div className="mx-auto max-w-[850px] divide-y divide-dashed divide-slate-300 bg-white shadow-sm">
+        <div className="mx-auto aspect-[210/297] w-full max-w-[794px] divide-y divide-dashed divide-slate-300 bg-white font-['Times_New_Roman',Times,serif] shadow-sm">
           {placement && (
-            <header className="px-5 py-8 text-center font-serif text-black sm:px-8">
+            <header className="px-5 py-8 text-center text-black sm:px-8">
               <p className="text-base font-bold sm:text-lg">URAIAN KEGIATAN PRAKTIK KERJA LAPANGAN</p>
               <p className="mt-1 text-base font-bold sm:text-lg">{placement.officeName?.toUpperCase()}</p>
               <p className="text-base font-bold sm:text-lg">{placement.region?.toUpperCase()}</p>
