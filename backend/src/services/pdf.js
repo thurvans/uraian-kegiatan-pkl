@@ -73,13 +73,13 @@ function centered(doc, text, size = 10, bold = false) {
 function reportHeader(doc, report, showDocumentTitle) {
   const p = report.placement;
   if (showDocumentTitle) {
-    centered(doc, 'URAIAN KEGIATAN PRAKTIK KERJA LAPANGAN', 12, true);
-    centered(doc, p.officeName.toUpperCase(), 10, true);
-    centered(doc, p.region.toUpperCase(), 10, true);
-    centered(doc, `BAGIAN ${p.division.toUpperCase()}`, 10, true);
+    centered(doc, 'URAIAN KEGIATAN PRAKTIK KERJA LAPANGAN', 14, true);
+    centered(doc, p.officeName.toUpperCase(), 14, true);
+    centered(doc, p.region.toUpperCase(), 14, true);
+    centered(doc, `BAGIAN ${p.division.toUpperCase()}`, 12, true);
     doc.moveDown(.45);
-    centered(doc, `BERTUGAS SEBAGAI : ${p.position.toUpperCase()}`, 9, true);
-    centered(doc, `PERIODE : ${formatDateId(p.startDate).replace(/^\S+, /, '')} S/D ${formatDateId(p.endDate).replace(/^\S+, /, '')}`, 9, true);
+    centered(doc, `BERTUGAS SEBAGAI : ${p.position.toUpperCase()}`, 12, true);
+    centered(doc, `PERIODE : ${formatDateId(p.startDate).replace(/^\S+, /, '')} S/D ${formatDateId(p.endDate).replace(/^\S+, /, '')}`, 12, true);
   }
 
   doc.moveDown(showDocumentTitle ? .3 : 0).font('Times-Roman').fontSize(9);
