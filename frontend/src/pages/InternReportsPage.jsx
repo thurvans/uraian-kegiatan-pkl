@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { Download, Send } from "../components/icons.jsx";
+import { Download, Eye, Send } from "../components/icons.jsx";
 import { api, download, getCachedApiResponse } from "../api.js";
 import { Notice } from "../components/Feedback.jsx";
 import { ConfirmModal } from "../components/Modal.jsx";
 import { ReportTable } from "../components/reports/ReportComponents.jsx";
+import { PeriodPreviewModal } from "../components/reports/PeriodPreviewModal.jsx";
 import { Page } from "../layouts/AppLayout.jsx";
 
 export default function InternReportsPage() {
@@ -13,6 +14,7 @@ export default function InternReportsPage() {
   const [selected, setSelected] = useState([]);
   const [notice, setNotice] = useState(null);
   const [pendingSubmit, setPendingSubmit] = useState(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const load = (showSpinner = false) => {
     if (showSpinner && !reports.length) setLoading(true);
@@ -153,16 +155,24 @@ export default function InternReportsPage() {
             </button>
           )}
           {placementId && (
-            <button
-              className="btn-secondary"
-              onClick={() =>
-                download(`/placements/${placementId}/pdf`, "periode.pdf").catch(
-                  (error) => setNotice({ type: "error", text: error.message }),
-                )
-              }
-            >
-              <Download size={16} /> Unduh seluruh periode
-            </button>
+            <>
+              <button
+                className="btn-secondary"
+                onClick={() => setPreviewOpen(true)}
+              >
+                <Eye size={16} /> Preview seluruh periode
+              </button>
+              <button
+                className="btn-secondary"
+                onClick={() =>
+                  download(`/placements/${placementId}/pdf`, "periode.pdf").catch(
+                    (error) => setNotice({ type: "error", text: error.message }),
+                  )
+                }
+              >
+                <Download size={16} /> Unduh seluruh periode
+              </button>
+            </>
           )}
         </div>
       }
@@ -194,6 +204,11 @@ export default function InternReportsPage() {
         config={submitConfig}
         busy={busy}
         onClose={() => setPendingSubmit(null)}
+      />
+      <PeriodPreviewModal
+        open={previewOpen}
+        reports={reports}
+        onClose={() => setPreviewOpen(false)}
       />
     </Page>
   );

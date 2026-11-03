@@ -105,3 +105,14 @@ tbody tr:hover { background: #f3f8f7 !important; }
   html { scroll-behavior: auto; }
   *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }
+
+@media print {
+  body.preview-print-protected * { display: none !important; }
+  body.preview-print-protected::before {
+    display: block;
+    padding: 2rem;
+    color: #000;
+    content: "Preview laporan dilindungi dan tidak dapat dicetak.";
+    font: 600 14pt/1.5 "Segoe UI", sans-serif;
+  }
+}
