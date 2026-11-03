@@ -4,6 +4,8 @@ export function BrandLogo({ className = '' }) {
       src="/logo-uraian-pkl.png"
       alt=""
       aria-hidden="true"
+      width="1254"
+      height="1254"
       className={`object-contain ${className}`}
     />
   );

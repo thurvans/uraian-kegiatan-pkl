@@ -35,7 +35,7 @@ function ReturnModal({ report, busy, onClose, onSubmit }) {
         <label>
           <span className="label">Alasan revisi</span>
           <textarea
-            autoFocus
+            name="returnReason"
             className="field min-h-32 resize-y leading-6"
             minLength={5}
             maxLength={1000}
@@ -229,6 +229,7 @@ export default function MentorReportsPage({ signedOnly = false }) {
           Peserta magang
         </label>
         <select
+          name="internFilter"
           id="intern-filter"
           className="field"
           value={internId}
@@ -246,7 +247,7 @@ export default function MentorReportsPage({ signedOnly = false }) {
         </select>
       </div>
       {!signedOnly && selected.length > 0 && (
-        <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mb-4 flex flex-col gap-3 rounded-lg border border-[#bcd9d9] bg-[#eaf4f3] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-blue-900">
             <b>{selected.length} laporan</b> dipilih dengan total{" "}
             <b>{selectedActivities} kegiatan</b>.

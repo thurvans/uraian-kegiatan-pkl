@@ -10,7 +10,7 @@ import {
 const AuthContext = createContext(null);
 
 function AppLoading() {
-  return <div className="grid min-h-screen place-items-center bg-slate-50"><div className="text-center"><div className="relative mx-auto mb-4 h-12 w-12"><div className="absolute inset-0 rounded-2xl bg-blue-100"/><div className="absolute inset-2 animate-spin rounded-full border-2 border-blue-200 border-t-navy-900"/></div><p className="text-sm font-medium text-slate-600">Menyiapkan ruang kerja…</p></div></div>;
+  return <div className="grid min-h-screen place-items-center bg-[#f3f5f3]"><div className="text-center" role="status"><div className="mx-auto mb-4 h-9 w-9 animate-spin rounded-full border-2 border-[#c9d8d4] border-t-[#176b78]"/><p className="text-sm font-medium text-[#627278]">Menyiapkan ruang kerja…</p></div></div>;
 }
 
 export function AuthProvider({ children }) {

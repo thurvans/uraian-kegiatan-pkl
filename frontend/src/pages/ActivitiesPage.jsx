@@ -228,11 +228,11 @@ export default function ActivitiesPage() {
             </button>
           )}
         </div>
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,.04)]">
+        <div className="overflow-hidden rounded-xl border border-[#dce3df] bg-white shadow-[0_1px_2px_rgba(21,40,46,.035)]">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] text-left text-sm">
               <caption className="sr-only">Riwayat kegiatan harian</caption>
-              <thead className="border-b border-slate-200 bg-slate-50/80 text-[11px] uppercase tracking-[.08em] text-slate-500">
+              <thead className="border-b border-[#dce3df] bg-[#f5f7f5] text-[11px] text-[#596b70]">
                 <tr>
                   <th className="w-24 px-5 py-3.5">
                     <label className="flex cursor-pointer items-center gap-2">
@@ -396,6 +396,7 @@ export default function ActivitiesPage() {
           <label>
             <span className="label">Uraian kegiatan</span>
             <textarea
+              name="description"
               className="field min-h-40 resize-y leading-6"
               minLength={5}
               maxLength={5000}

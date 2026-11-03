@@ -16,7 +16,7 @@ export function PanelLoading() {
 export function Notice({ value, clear }) {
   if (!value) return null;
   const error = value.type === 'error';
-  return <div className={`mb-5 flex items-start gap-3 rounded-2xl border px-4 py-3.5 text-sm shadow-sm ${error ? 'border-red-200 bg-red-50 text-red-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`} role="status"><span className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full ${error ? 'bg-red-100' : 'bg-emerald-100'}`}>{error ? <AlertTriangle size={14}/> : <CheckCircle2 size={14}/>}</span><span className="flex-1 leading-6">{value.text}</span><button className="rounded-lg p-1 transition hover:bg-black/5" onClick={clear} aria-label="Tutup pemberitahuan"><X size={16}/></button></div>;
+  return <div className={`mb-5 flex items-start gap-3 rounded-lg border px-4 py-3.5 text-sm ${error ? 'border-red-200 bg-red-50 text-red-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`} role="status" aria-live="polite"><span className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full ${error ? 'bg-red-100' : 'bg-emerald-100'}`}>{error ? <AlertTriangle size={14}/> : <CheckCircle2 size={14}/>}</span><span className="flex-1 leading-6">{value.text}</span><button className="rounded-md p-1 transition hover:bg-black/5" onClick={clear} aria-label="Tutup pemberitahuan"><X size={16}/></button></div>;
 }
 
 export function Status({ value }) {

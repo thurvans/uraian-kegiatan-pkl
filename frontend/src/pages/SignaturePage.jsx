@@ -84,13 +84,13 @@ export default function SignaturePage() {
               </p>
             </div>
           </div>
-          <div className="relative overflow-hidden rounded-2xl border-2 border-dashed border-slate-300 bg-[linear-gradient(to_bottom,transparent_49%,#e2e8f0_50%,transparent_51%)] p-2">
+          <div className="relative overflow-hidden rounded-lg border border-[#bfcac6] bg-[#fafbf9] p-2 shadow-[inset_0_-1px_0_#dce3df]">
             <canvas
               ref={canvasRef}
               className="h-64 w-full touch-none rounded-xl"
               aria-label="Area gambar tanda tangan"
             />
-            <span className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 text-[10px] font-medium uppercase tracking-widest text-slate-300">
+            <span className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 text-[10px] font-medium text-slate-400">
               Tanda tangan di area ini
             </span>
           </div>

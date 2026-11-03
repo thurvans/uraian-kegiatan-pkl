@@ -59,22 +59,17 @@ export default function ProfilePage() {
       eyebrow="Pengaturan akun"
     >
       <Notice value={notice} clear={() => setNotice(null)} />
-      <div className="grid max-w-5xl gap-5 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,.75fr)]">
+      <div className="max-w-4xl">
         <section className="card overflow-hidden p-0">
-          <div className="relative min-h-40 overflow-hidden bg-navy-950 px-6 py-7 text-white sm:px-8">
-            <div className="absolute -right-12 -top-20 h-56 w-56 rounded-full border border-white/10" />
-            <div className="absolute -right-2 -top-10 h-36 w-36 rounded-full border border-blue-300/15" />
-            <div className="absolute bottom-0 right-28 h-px w-40 bg-gradient-to-r from-transparent via-blue-300/30 to-transparent" />
-            <div className="relative flex items-start justify-between gap-5">
+          <div className="border-b border-[#dce3df] bg-[#173942] px-6 py-7 text-white sm:px-8">
+            <div className="flex items-center justify-between gap-5">
               <div>
-                <p className="mt-5 text-xs font-semibold uppercase tracking-[.16em] text-slate-400">
-                  Identitas pengguna
-                </p>
-                <h2 className="mt-1 text-xl font-semibold tracking-tight sm:text-2xl">
+                <h2 className="text-xl font-semibold tracking-[-.02em] sm:text-2xl">
                   Informasi pribadi
                 </h2>
+                <p className="mt-1 text-sm text-[#b9d0d4]">Identitas utama pada laporan dan ruang kerja.</p>
               </div>
-              <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl border border-white/10 bg-white/10 text-xl font-bold shadow-lg shadow-black/10 backdrop-blur-sm sm:h-16 sm:w-16 sm:text-2xl">
+              <div className="grid h-14 w-14 shrink-0 place-items-center rounded-lg bg-white text-xl font-semibold text-[#173942] sm:h-16 sm:w-16 sm:text-2xl">
                 {user.name[0]?.toUpperCase()}
               </div>
             </div>
@@ -91,6 +86,7 @@ export default function ProfilePage() {
                     <div className="max-w-lg">
                       <input
                         id="profile-name"
+                        name="name"
                         className="field"
                         value={name}
                         onChange={(event) => setName(event.target.value)}
@@ -106,7 +102,7 @@ export default function ProfilePage() {
                     </div>
                   ) : (
                     <div>
-                      <p className="truncate text-lg font-bold text-slate-950">
+                      <p className="truncate text-lg font-semibold text-[#15282e]">
                         {user.name}
                       </p>
                       <p className="mt-1 text-xs text-slate-500">
@@ -151,7 +147,7 @@ export default function ProfilePage() {
             <div className="my-7 h-px bg-slate-100" />
             <div className="grid gap-6 sm:grid-cols-2">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[.12em] text-slate-400">
+                <p className="text-xs font-semibold text-[#718086]">
                   Alamat email
                 </p>
                 <p className="mt-2 break-all text-sm font-semibold text-slate-800">
@@ -162,7 +158,7 @@ export default function ProfilePage() {
                 </p>
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[.12em] text-slate-400">
+                <p className="text-xs font-semibold text-[#718086]">
                   Peran akun
                 </p>
                 <p className="mt-2 text-sm font-semibold text-slate-800">

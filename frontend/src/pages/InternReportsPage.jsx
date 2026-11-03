@@ -169,7 +169,7 @@ export default function InternReportsPage() {
     >
       <Notice value={notice} clear={() => setNotice(null)} />
       {selected.length > 0 && (
-        <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3">
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-[#bcd9d9] bg-[#eaf4f3] px-4 py-3">
           <p className="text-sm text-blue-900">
             <b>{selected.length} laporan</b> siap diajukan.
           </p>

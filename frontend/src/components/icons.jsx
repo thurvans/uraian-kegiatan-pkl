@@ -34,7 +34,7 @@ import {
 function createIcon(icon) {
   return function Icon({ size, style, ...props }) {
     const dimensions = size ? { width: size, height: size } : undefined;
-    return <FontAwesomeIcon icon={icon} style={{ ...dimensions, ...style }} {...props} />;
+    return <FontAwesomeIcon icon={icon} aria-hidden={props['aria-label'] ? undefined : true} focusable="false" style={{ ...dimensions, ...style }} {...props} />;
   };
 }
 

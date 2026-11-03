@@ -73,6 +73,7 @@ export default function PlacementPage() {
                 >
                   <span className="label">{label}</span>
                   <input
+                    name={key}
                     className="field"
                     required
                     maxLength={max}
@@ -109,7 +110,7 @@ export default function PlacementPage() {
           </form>{" "}
           <aside className="space-y-4">
             <div className="card">
-              <p className="eyebrow">Mentor terhubung</p>
+              <p className="text-sm font-semibold text-[#31474d]">Mentor terhubung</p>
               <div className="mt-4 flex items-center gap-3">
                 <div className="grid h-11 w-11 place-items-center rounded-xl bg-emerald-50 font-bold text-emerald-700">
                   {form.mentor?.name?.[0] || "M"}
@@ -124,12 +125,12 @@ export default function PlacementPage() {
                 </div>
               </div>
             </div>
-            <div className="rounded-2xl border border-blue-100 bg-blue-50 p-5">
-              <ShieldCheck className="text-blue-700" size={21} />
-              <p className="mt-3 text-sm font-bold text-blue-950">
+            <div className="rounded-lg border border-[#bcd9d9] bg-[#eaf4f3] p-5">
+              <ShieldCheck className="text-[#176b78]" size={21} />
+              <p className="mt-3 text-sm font-semibold text-[#173942]">
                 Data terkunci selama peninjauan
               </p>
-              <p className="mt-1 text-xs leading-5 text-blue-800/75">
+              <p className="mt-1 text-xs leading-5 text-[#4f696e]">
                 Identitas dan periode tidak dapat diubah saat laporan sedang
                 ditinjau atau sudah ditandatangani mentor.
               </p>
