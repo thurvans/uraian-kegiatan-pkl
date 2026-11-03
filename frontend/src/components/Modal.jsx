@@ -5,11 +5,14 @@ import { X } from './icons.jsx';
 export function ModalFrame({ open, onClose, title, description, children, maxWidth = 'max-w-lg' }) {
   const dialogRef = useRef(null);
   const closeRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
     if (!open) return undefined;
     const previousFocus = document.activeElement;
     const handleKey = event => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') onCloseRef.current();
       if (event.key !== 'Tab') return;
       const focusable = dialogRef.current?.querySelectorAll('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [href], [tabindex]:not([tabindex="-1"])');
       if (!focusable?.length) return;
@@ -25,7 +28,7 @@ export function ModalFrame({ open, onClose, title, description, children, maxWid
       document.body.style.overflow = '';
       previousFocus?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
   if (!open) return null;
   return createPortal(
     <div className="fixed inset-0 z-50 grid place-items-center bg-[#102a33]/55 p-4" role="dialog" aria-modal="true" aria-labelledby="modal-title" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
