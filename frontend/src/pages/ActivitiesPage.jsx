@@ -173,6 +173,31 @@ export default function ActivitiesPage() {
         ? []
         : items.map((item) => item.id),
     );
+  const insertDescriptionLineBreak = (event) => {
+    if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const textarea = event.currentTarget;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const cursorPosition = start + 1;
+
+    setForm((current) => {
+      if (current.description.length - (end - start) >= 5000) return current;
+
+      return {
+        ...current,
+        description: `${current.description.slice(0, start)}\n${current.description.slice(end)}`,
+      };
+    });
+
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(cursorPosition, cursorPosition);
+    });
+  };
   const allSelected =
     items.length > 0 && items.every((item) => selected.includes(item.id));
   const someSelected =
@@ -412,9 +437,7 @@ export default function ActivitiesPage() {
                   description: event.target.value,
                 }))
               }
-              onKeyDown={(event) => {
-                if (event.key === "Enter") event.stopPropagation();
-              }}
+              onKeyDown={insertDescriptionLineBreak}
             />
             <span className="mt-1.5 flex justify-between text-xs text-slate-400">
               <span>Minimal 5 karakter · Enter untuk baris baru</span>
