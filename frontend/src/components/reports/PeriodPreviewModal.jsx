@@ -98,10 +98,6 @@ export function PeriodPreviewModal({ open, reports, onClose }) {
       maxWidth="max-w-6xl"
     >
       <div className="report-preview-protected bg-[#e8ecea] p-3 sm:p-5">
-        <div className="mb-3 flex items-start gap-3 rounded-lg border border-[#bcd9d9] bg-[#eef7f6] px-4 py-3 text-sm text-[#315960]" role="note">
-          <Lock size={16} className="mt-0.5 shrink-0" />
-          <p>Mode preview terlindungi. Tombol unduh tidak tersedia dan shortcut <kbd className="font-semibold">Ctrl+P</kbd> dinonaktifkan.</p>
-        </div>
         {printBlocked && (
           <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800" role="alert" aria-live="assertive">
             <AlertTriangle size={16} /> Pencetakan dinonaktifkan untuk preview laporan yang belum final.
