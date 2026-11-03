@@ -105,6 +105,9 @@ export default function ActivitiesPage() {
     });
   const submit = async (event) => {
     event.preventDefault();
+    // Enter pada field form bukan aksi simpan. Pengiriman hanya dilakukan
+    // ketika pengguna menekan tombol submit secara eksplisit.
+    if (!event.nativeEvent.submitter) return;
     setBusy(true);
     try {
       const result = await api(
@@ -404,11 +407,17 @@ export default function ActivitiesPage() {
               placeholder="Jelaskan pekerjaan dan hasil yang diselesaikan…"
               value={form.description}
               onChange={(event) =>
-                setForm({ ...form, description: event.target.value })
+                setForm((current) => ({
+                  ...current,
+                  description: event.target.value,
+                }))
               }
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.stopPropagation();
+              }}
             />
             <span className="mt-1.5 flex justify-between text-xs text-slate-400">
-              <span>Minimal 5 karakter</span>
+              <span>Minimal 5 karakter · Enter untuk baris baru</span>
               <span>{form.description.length}/5000</span>
             </span>
           </label>
@@ -421,7 +430,7 @@ export default function ActivitiesPage() {
             >
               Batal
             </button>
-            <button className="btn-primary" disabled={busy}>
+            <button type="submit" className="btn-primary" disabled={busy}>
               <Save size={17} />
               {busy
                 ? "Menyimpan…"
